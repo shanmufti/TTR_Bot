@@ -110,6 +110,11 @@ def _record_phase(phase_name: str) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--name", default="", help="Pre-fill the path name")
+    args = parser.parse_args()
+
     print("=" * 60)
     print("  TTR Bot — Sell Path Recorder")
     print("=" * 60)
@@ -122,7 +127,15 @@ def main():
     print("    - TTR must be the focused window during recording")
     print()
 
-    name = input("  Name for this path (e.g. 'Estate Left Dock'): ").strip()
+    if args.name:
+        print(f"  Location: {args.name}")
+        confirm = input(f"  Use '{args.name}' as the path name? [Y/n]: ").strip().lower()
+        name = args.name if confirm in ("", "y", "yes") else ""
+    else:
+        name = ""
+
+    if not name:
+        name = input("  Name for this path (e.g. 'Estate Left Dock'): ").strip()
     if not name:
         print("  Aborted — no name given.")
         return

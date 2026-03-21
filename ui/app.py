@@ -44,10 +44,12 @@ class _TkLogHandler(logging.Handler):
 class App:
     """Main application window."""
 
+    _SELL_AUTO = "(auto)"
+
     def __init__(self) -> None:
         self._root = tk.Tk()
         self._root.title("TTR Fishing Bot")
-        self._root.geometry("520x660")
+        self._root.geometry("520x690")
         self._root.resizable(False, False)
         self._root.configure(bg="#0f3460")
 
@@ -57,6 +59,7 @@ class App:
         self._build_ui()
         self._attach_logger()
         self._wire_callbacks()
+        self._on_location_changed()
         self._poll_window_status()
 
     # ------------------------------------------------------------------
@@ -104,6 +107,7 @@ class App:
             values=settings.FISHING_LOCATIONS, state="readonly", width=28,
         )
         loc_combo.grid(row=row, column=1, sticky="w", padx=4, pady=3)
+        loc_combo.bind("<<ComboboxSelected>>", lambda _: self._on_location_changed())
         row += 1
 
         # Casts
@@ -154,28 +158,37 @@ class App:
         tk.Label(settings_frame, text="Sell path:", fg=fg, bg=bg).grid(
             row=row, column=0, sticky="w", padx=8, pady=3,
         )
-        sell_frame = tk.Frame(settings_frame, bg=bg)
-        sell_frame.grid(row=row, column=1, sticky="w", padx=4, pady=3)
+        sell_outer = tk.Frame(settings_frame, bg=bg)
+        sell_outer.grid(row=row, column=1, sticky="w", padx=4, pady=3)
 
-        _AUTO = "(auto)"
-        self._sell_path_var = tk.StringVar(value=_AUTO)
+        sell_row1 = tk.Frame(sell_outer, bg=bg)
+        sell_row1.pack(anchor="w")
+
+        self._sell_path_var = tk.StringVar(value=self._SELL_AUTO)
         self._sell_path_combo = ttk.Combobox(
-            sell_frame, textvariable=self._sell_path_var,
+            sell_row1, textvariable=self._sell_path_var,
             values=self._get_sell_path_options(), state="readonly", width=20,
         )
         self._sell_path_combo.pack(side="left")
 
         tk.Button(
-            sell_frame, text="Record", font=("Helvetica", 9),
+            sell_row1, text="Record", font=("Helvetica", 9),
             fg="#ffffff", bg="#533483", activebackground="#442b6e",
             command=self._on_record_sell_path,
         ).pack(side="left", padx=(6, 0))
 
         tk.Button(
-            sell_frame, text="↻", font=("Helvetica", 9),
+            sell_row1, text="↻", font=("Helvetica", 9),
             fg=fg, bg=entry_bg, width=2,
             command=self._refresh_sell_paths,
         ).pack(side="left", padx=(4, 0))
+
+        self._sell_status_var = tk.StringVar(value="")
+        self._sell_status_label = tk.Label(
+            sell_outer, textvariable=self._sell_status_var,
+            font=("Helvetica", 9), fg="#a0a0a0", bg=bg, anchor="w",
+        )
+        self._sell_status_label.pack(anchor="w", pady=(2, 0))
         row += 1
 
         # Checkboxes
@@ -257,14 +270,15 @@ class App:
         if self._bot.running:
             return
 
-        # Resolve sell path file
+        # Resolve sell path file — explicit selection or auto-match by location
         sell_path_file = None
         sell_choice = self._sell_path_var.get()
-        if sell_choice != "(auto)":
+        if sell_choice and sell_choice != self._SELL_AUTO:
             for entry in list_sell_paths():
                 if entry["name"] == sell_choice:
                     sell_path_file = entry["path"]
                     break
+        # (auto): sell_controller will match by location name at runtime
 
         cfg = FishingConfig(
             location=self._location_var.get(),
@@ -300,29 +314,54 @@ class App:
 
     def _get_sell_path_options(self) -> list[str]:
         """Build the dropdown list of sell paths."""
-        options = ["(auto)"]
+        options = [self._SELL_AUTO]
         for entry in list_sell_paths():
             options.append(entry["name"])
         return options
 
+    def _get_sell_path_names(self) -> set[str]:
+        """Return a set of recorded sell path names (lowercased)."""
+        return {e["name"].lower() for e in list_sell_paths()}
+
+    def _on_location_changed(self) -> None:
+        """When the fishing location changes, update the sell path status."""
+        location = self._location_var.get()
+        if location == "Fish Anywhere":
+            self._sell_status_var.set("No sell needed for Fish Anywhere")
+            self._sell_status_label.config(fg="#a0a0a0")
+            return
+
+        recorded = self._get_sell_path_names()
+        if location.lower() in recorded:
+            self._sell_status_var.set(f"Sell path found for {location}")
+            self._sell_status_label.config(fg="#1a8f3c")
+        else:
+            self._sell_status_var.set(f"No sell path for {location} — click Record")
+            self._sell_status_label.config(fg="#e94560")
+
     def _refresh_sell_paths(self) -> None:
-        """Refresh the sell path dropdown."""
+        """Refresh the sell path dropdown and re-check status."""
         options = self._get_sell_path_options()
         self._sell_path_combo["values"] = options
         log.info("Refreshed sell paths: %d custom paths found", len(options) - 1)
+        self._on_location_changed()
 
     def _on_record_sell_path(self) -> None:
-        """Launch the sell-path recorder in a new terminal window."""
+        """Launch the sell-path recorder in a new terminal window.
+
+        Pre-fills the current fishing location as the suggested path name.
+        """
         script = os.path.join(settings.PROJECT_ROOT, "record_sell_path.py")
         venv_python = os.path.join(settings.PROJECT_ROOT, "venv", "bin", "python3")
         if not os.path.isfile(venv_python):
             venv_python = sys.executable
 
-        cmd = f'cd "{settings.PROJECT_ROOT}" && "{venv_python}" "{script}"'
+        location = self._location_var.get()
+        cmd = f'cd "{settings.PROJECT_ROOT}" && "{venv_python}" "{script}" --name "{location}"'
         subprocess.Popen(
             ["osascript", "-e", f'tell app "Terminal" to do script "{cmd}"'],
         )
-        log.info("Launched sell-path recorder in a new Terminal window")
+        log.info("Launched sell-path recorder for '%s'", location)
 
     def _toggle_overlay(self) -> None:
         if self._overlay_var.get():
