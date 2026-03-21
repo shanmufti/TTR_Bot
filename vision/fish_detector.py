@@ -8,7 +8,6 @@ from __future__ import annotations
 import math
 from typing import NamedTuple
 
-import cv2
 import numpy as np
 
 from config import settings

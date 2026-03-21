@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
 import tkinter as tk
 from tkinter import ttk, scrolledtext
 import logging
-import threading
 
 from config import settings
 from core.window_manager import is_window_available
 from fishing.fishing_bot import FishingBot, FishingConfig, FishingStats
+from fishing.sell_controller import list_sell_paths
 from ui.overlay import OverlayWindow
 from utils.logger import log
 
@@ -44,7 +47,7 @@ class App:
     def __init__(self) -> None:
         self._root = tk.Tk()
         self._root.title("TTR Fishing Bot")
-        self._root.geometry("520x620")
+        self._root.geometry("520x660")
         self._root.resizable(False, False)
         self._root.configure(bg="#0f3460")
 
@@ -147,6 +150,34 @@ class App:
         ).grid(row=row, column=1, sticky="w", padx=4, pady=3)
         row += 1
 
+        # Sell path
+        tk.Label(settings_frame, text="Sell path:", fg=fg, bg=bg).grid(
+            row=row, column=0, sticky="w", padx=8, pady=3,
+        )
+        sell_frame = tk.Frame(settings_frame, bg=bg)
+        sell_frame.grid(row=row, column=1, sticky="w", padx=4, pady=3)
+
+        _AUTO = "(auto)"
+        self._sell_path_var = tk.StringVar(value=_AUTO)
+        self._sell_path_combo = ttk.Combobox(
+            sell_frame, textvariable=self._sell_path_var,
+            values=self._get_sell_path_options(), state="readonly", width=20,
+        )
+        self._sell_path_combo.pack(side="left")
+
+        tk.Button(
+            sell_frame, text="Record", font=("Helvetica", 9),
+            fg="#ffffff", bg="#533483", activebackground="#442b6e",
+            command=self._on_record_sell_path,
+        ).pack(side="left", padx=(6, 0))
+
+        tk.Button(
+            sell_frame, text="↻", font=("Helvetica", 9),
+            fg=fg, bg=entry_bg, width=2,
+            command=self._refresh_sell_paths,
+        ).pack(side="left", padx=(4, 0))
+        row += 1
+
         # Checkboxes
         checks_frame = tk.Frame(settings_frame, bg=bg)
         checks_frame.grid(row=row, column=0, columnspan=2, sticky="w", padx=8, pady=3)
@@ -226,6 +257,15 @@ class App:
         if self._bot.running:
             return
 
+        # Resolve sell path file
+        sell_path_file = None
+        sell_choice = self._sell_path_var.get()
+        if sell_choice != "(auto)":
+            for entry in list_sell_paths():
+                if entry["name"] == sell_choice:
+                    sell_path_file = entry["path"]
+                    break
+
         cfg = FishingConfig(
             location=self._location_var.get(),
             casts_per_round=self._casts_var.get(),
@@ -234,6 +274,7 @@ class App:
             auto_detect=self._autodetect_var.get(),
             quick_cast=self._quickcast_var.get(),
             bite_timeout=float(self._timeout_var.get()),
+            sell_path_file=sell_path_file,
         )
 
         if self._overlay_var.get() and self._overlay is None:
@@ -256,6 +297,32 @@ class App:
         self._bot.toggle_pause()
         text = "Resume" if self._bot.paused else "Pause"
         self._pause_btn.config(text=text)
+
+    def _get_sell_path_options(self) -> list[str]:
+        """Build the dropdown list of sell paths."""
+        options = ["(auto)"]
+        for entry in list_sell_paths():
+            options.append(entry["name"])
+        return options
+
+    def _refresh_sell_paths(self) -> None:
+        """Refresh the sell path dropdown."""
+        options = self._get_sell_path_options()
+        self._sell_path_combo["values"] = options
+        log.info("Refreshed sell paths: %d custom paths found", len(options) - 1)
+
+    def _on_record_sell_path(self) -> None:
+        """Launch the sell-path recorder in a new terminal window."""
+        script = os.path.join(settings.PROJECT_ROOT, "record_sell_path.py")
+        venv_python = os.path.join(settings.PROJECT_ROOT, "venv", "bin", "python3")
+        if not os.path.isfile(venv_python):
+            venv_python = sys.executable
+
+        cmd = f'cd "{settings.PROJECT_ROOT}" && "{venv_python}" "{script}"'
+        subprocess.Popen(
+            ["osascript", "-e", f'tell app "Terminal" to do script "{cmd}"'],
+        )
+        log.info("Launched sell-path recorder in a new Terminal window")
 
     def _toggle_overlay(self) -> None:
         if self._overlay_var.get():

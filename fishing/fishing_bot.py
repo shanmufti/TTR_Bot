@@ -5,10 +5,9 @@ Ported from FishingStrategyBase.cs + FishingService.cs in the reference bot.
 
 from __future__ import annotations
 
-import random
 import time
 import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Callable
 
 from config import settings
@@ -17,7 +16,6 @@ from core.screen_capture import capture_window
 from core.window_manager import find_ttr_window, is_window_available, WindowInfo
 from vision.pond_detector import detect_pond, PondArea
 from vision.fish_detector import find_best_fish
-from vision.bubble_detector import has_bubbles_above
 from vision.template_matcher import find_template, is_element_visible
 from utils.logger import log
 
@@ -41,6 +39,7 @@ class FishingConfig:
     auto_detect: bool = False
     quick_cast: bool = False
     bite_timeout: float = settings.BITE_TIMEOUT_S
+    sell_path_file: str | None = None  # path to recorded sell-path JSON
 
 
 class FishingBot:
@@ -121,7 +120,7 @@ class FishingBot:
                 self._notify_stats()
 
                 if not is_first_cycle:
-                    self._notify_status("Returning to dock…")
+                    self._notify_status("Settling at dock…")
                     time.sleep(settings.SELL_WALK_DELAY_S)
 
                 self._notify_status("Fishing…")
@@ -136,12 +135,17 @@ class FishingBot:
                 if cfg.location == "Fish Anywhere":
                     self._exit_fishing()
                     sells_remaining = 0
-                elif not bucket_full:
-                    self._exit_fishing()
-                    if sells_remaining > 1:
-                        self._sell_fish(cfg.location)
-                    sells_remaining -= 1
                 else:
+                    # Exit the dock UI (bucket-full already dismissed the
+                    # popup and kicked us off the dock, so skip exit in
+                    # that case).
+                    if not bucket_full:
+                        self._exit_fishing()
+                    time.sleep(0.5)
+
+                    # Sell fish — always run this so we empty the bucket
+                    self._notify_status("Selling fish…")
+                    self._sell_fish(cfg.location, cfg.sell_path_file)
                     sells_remaining -= 1
 
             reason = (
@@ -155,7 +159,7 @@ class FishingBot:
             log.exception("Fishing loop crashed")
             self._finish(f"Error: {exc}")
 
-    def _fishing_round(self, cfg: FishingConfig, is_first: bool) -> bool:
+    def _fishing_round(self, cfg: FishingConfig, _is_first: bool) -> bool:
         """Execute one round of casts. Returns True if bucket became full."""
         self.stats.cast_count = 0
         self.stats.fish_caught = 0
@@ -330,10 +334,10 @@ class FishingBot:
             time.sleep(0.3)
         log.warning("Could not find exit fishing button")
 
-    def _sell_fish(self, location: str) -> None:
+    def _sell_fish(self, location: str, sell_path_file: str | None = None) -> None:
         """Execute a sell-fish walk sequence for the given location."""
         from fishing.sell_controller import walk_and_sell
-        walk_and_sell(location)
+        walk_and_sell(location, sell_path_file=sell_path_file)
 
     # ------------------------------------------------------------------
     # Notifications
