@@ -1,0 +1,113 @@
+"""All configurable thresholds, delays, and defaults for the TTR fishing bot."""
+
+import os
+
+# ---------------------------------------------------------------------------
+# Paths
+# ---------------------------------------------------------------------------
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+TEMPLATES_DIR = os.path.join(PROJECT_ROOT, "templates")
+LOGS_DIR = os.path.join(PROJECT_ROOT, "logs")
+
+# ---------------------------------------------------------------------------
+# Game window
+# ---------------------------------------------------------------------------
+GAME_WINDOW_TITLE = "Toontown Rewritten"
+
+# ---------------------------------------------------------------------------
+# Fishing – general
+# ---------------------------------------------------------------------------
+DEFAULT_CASTS = 20
+DEFAULT_SELL_ROUNDS = 3
+DEFAULT_VARIANCE = 20          # pixels of random offset when casting
+CAST_DRAG_DISTANCE = 150       # pixels to drag downward on cast
+CAST_DRAG_HOLD_MS = 500        # hold time during drag (ms)
+BITE_TIMEOUT_S = 30            # max seconds to wait for a bite
+BITE_POLL_INTERVAL_S = 0.10    # seconds between bite-check polls
+POST_CAST_DELAY_S = 1.5        # wait after cast before polling for bite
+POST_CAST_DELAY_QUICK_S = 0.3  # shorter delay when quick-casting
+POST_CATCH_DELAY_S = 0.5       # wait after catch before closing popup
+BETWEEN_CAST_DELAY_S = 0.5     # wait between successive casts
+SELL_WALK_DELAY_S = 3.0        # settle time after returning from sell trip
+
+# ---------------------------------------------------------------------------
+# Fishing – fish detection
+# ---------------------------------------------------------------------------
+FISH_WAIT_BEFORE_CAST = False   # wait for shadow before casting
+FISH_WAIT_TIMEOUT_S = 20       # max seconds to wait for a shadow
+FISH_WAIT_SCAN_DELAY_S = 2.0   # delay between detection scans
+
+# ---------------------------------------------------------------------------
+# Vision – water / pond
+# ---------------------------------------------------------------------------
+WATER_HUE_RANGE = (80, 140)    # H range in HSV (teal/cyan)
+WATER_SAT_MIN = 40             # minimum saturation
+WATER_VAL_MIN = 50             # minimum value/brightness
+POND_SCAN_STEP = 5             # pixel step when scanning for water
+POND_TOP_MARGIN = 80           # skip top UI region
+POND_BOTTOM_MARGIN = 250       # skip bottom dock region
+POND_SIDE_MARGIN = 80          # skip left/right edges
+POND_MIN_WATER_PIXELS = 50     # minimum water pixels to accept pond
+POND_PADDING = 15              # padding around detected pond area
+
+# ---------------------------------------------------------------------------
+# Vision – fish shadow detection
+# ---------------------------------------------------------------------------
+SHADOW_SCAN_STEP = 3           # pixel step when scanning for shadows
+SHADOW_BLOB_MAX_DISTANCE = 12  # max pixel distance to cluster blobs
+SHADOW_MIN_ASPECT = 0.3        # minimum blob aspect ratio
+SHADOW_MAX_ASPECT = 3.0        # maximum blob aspect ratio
+SHADOW_MIN_FILL = 0.2          # minimum fill ratio of bounding box
+SHADOW_MIN_SIZE = 15           # minimum blob dimension (px)
+SHADOW_WATER_CHECK_RADIUS = 30 # radius for water-surrounding check
+SHADOW_WATER_MIN_RATIO = 0.35  # min fraction of surrounding ring that is water
+
+# Shadow color: darker than water, still has blue/green tint
+SHADOW_BRIGHTNESS_MAX = 120    # max average brightness for shadow pixel
+SHADOW_BLUE_GREEN_BIAS = 15    # (G+B)/2 must exceed R by at least this
+
+# ---------------------------------------------------------------------------
+# Vision – bubble detection
+# ---------------------------------------------------------------------------
+BUBBLE_SCAN_WIDTH = 60         # px width of scan area above shadow
+BUBBLE_SCAN_HEIGHT = 80        # px height of scan area above shadow
+BUBBLE_MIN_PIXELS = 3          # minimum bright pixels to confirm bubbles
+BUBBLE_BRIGHTNESS_OFFSET = 40  # bubble threshold = avg_water_brightness + this
+BUBBLE_BRIGHTNESS_MIN = 150    # absolute minimum brightness for bubble pixel
+BUBBLE_MAX_COLOR_DIFF = 50     # max channel spread (R vs G vs B)
+BUBBLE_SCAN_STEP = 3           # pixel step when scanning for bubbles
+
+# ---------------------------------------------------------------------------
+# Vision – template matching
+# ---------------------------------------------------------------------------
+TEMPLATE_MATCH_THRESHOLD = 0.75  # minimum confidence for a template match
+TEMPLATE_NAMES = {
+    "red_fishing_button": "Red_Fishing_Button.png",
+    "sell_all_button": "Blue_Sell_All_Button.png",
+    "exit_fishing_button": "Exit_Fishing_Button.png",
+    "fish_popup_close": "FishPopupCloseButton.png",
+    "bucket_full_popup": "FishBucketFullPopup.png",
+    "ok_button": "Blue_Ok_Button.png",
+}
+
+# ---------------------------------------------------------------------------
+# Input
+# ---------------------------------------------------------------------------
+PYAUTOGUI_PAUSE = 0.05        # global pyautogui pause between actions
+PYAUTOGUI_FAILSAFE = True     # move mouse to corner to abort
+
+# ---------------------------------------------------------------------------
+# Fishing locations (for sell-walk sequences)
+# ---------------------------------------------------------------------------
+FISHING_LOCATIONS = [
+    "Fish Anywhere",
+    "Estate (Left Dock)",
+    "TTC Punchline Place",
+    "DD Lighthouse Lane",
+    "DG Elm Street",
+    "MM Tenor Terrace",
+    "Brrrgh Polar Place",
+    "Brrrgh Walrus Way",
+    "Brrrgh Sleet Street",
+    "DDL Lullaby Lane",
+]
