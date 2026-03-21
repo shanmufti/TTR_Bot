@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 import Quartz
+import CoreFoundation
 from Quartz import (
     CGRectNull,
     CGWindowListCreateImage,
@@ -23,38 +24,34 @@ def _cgimage_to_numpy(cg_image) -> np.ndarray | None:
 
     width = Quartz.CGImageGetWidth(cg_image)
     height = Quartz.CGImageGetHeight(cg_image)
+    if width == 0 or height == 0:
+        return None
 
-    color_space = Quartz.CGColorSpaceCreateDeviceRGB()
-    bytes_per_row = 4 * width
-    buffer_size = bytes_per_row * height
+    # Get raw pixel data via the image's data provider
+    data_provider = Quartz.CGImageGetDataProvider(cg_image)
+    if data_provider is None:
+        return None
 
-    # Create a bitmap context and draw the image into it
-    context = Quartz.CGBitmapContextCreate(
-        None,
-        width,
-        height,
-        8,  # bits per component
-        bytes_per_row,
-        color_space,
-        Quartz.kCGImageAlphaPremultipliedFirst | Quartz.kCGBitmapByteOrder32Little,
+    cf_data = Quartz.CGDataProviderCopyData(data_provider)
+    if cf_data is None:
+        return None
+
+    raw_bytes = CoreFoundation.CFDataGetBytes(
+        cf_data, CoreFoundation.CFRangeMake(0, CoreFoundation.CFDataGetLength(cf_data)), None
     )
-    if context is None:
-        return None
+    arr = np.frombuffer(raw_bytes, dtype=np.uint8)
 
-    Quartz.CGContextDrawImage(context, Quartz.CGRectMake(0, 0, width, height), cg_image)
+    bpp = Quartz.CGImageGetBitsPerPixel(cg_image) // 8  # bytes per pixel
+    stride = Quartz.CGImageGetBytesPerRow(cg_image)
 
-    # Extract pixel data from context
-    data = Quartz.CGBitmapContextGetData(context)
-    if data is None:
-        return None
+    # Reshape using stride (may include row padding)
+    if stride == width * bpp:
+        arr = arr.reshape((height, width, bpp))
+    else:
+        arr = arr.reshape((height, stride))
+        arr = arr[:, : width * bpp].reshape((height, width, bpp))
 
-    # Data is BGRA (due to kCGBitmapByteOrder32Little + PremultipliedFirst)
-    buf = (Quartz.c_void_p * 1)()  # noqa – not needed; use ctypes approach below
-    import ctypes
-    buf_ptr = ctypes.cast(int(data), ctypes.POINTER(ctypes.c_uint8 * buffer_size))
-    arr = np.frombuffer(buf_ptr.contents, dtype=np.uint8).reshape((height, width, 4))
-
-    # Drop alpha channel → BGR (OpenCV native)
+    # The default macOS bitmap order is BGRA — keep BGR, drop alpha
     return arr[:, :, :3].copy()
 
 
