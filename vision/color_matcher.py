@@ -68,6 +68,37 @@ def build_shadow_mask(frame_bgr: np.ndarray) -> np.ndarray:
     return (mask.astype(np.uint8) * 255)
 
 
+def build_relative_shadow_mask(frame_bgr: np.ndarray, water_mask: np.ndarray) -> np.ndarray:
+    """Detect fish shadows as locally-dark spots within the water.
+
+    Uses a large Gaussian blur as a local brightness reference, then finds
+    pixels significantly darker than their local neighbourhood.  This handles
+    ponds with brightness gradients (e.g. dark DDL water).
+    """
+    gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
+
+    water_pixels = gray[water_mask > 0]
+    if len(water_pixels) == 0:
+        return np.zeros(gray.shape, dtype=np.uint8)
+
+    # Aggressively erode to keep only the pond interior, far from
+    # docks, posts, lamps, and UI labels that cause false positives.
+    erode_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (101, 101))
+    interior_water = cv2.erode(water_mask, erode_kernel, iterations=1)
+
+    # Build a local-average reference by heavily blurring the water area.
+    water_median = float(np.median(water_pixels))
+    filled = gray.copy()
+    filled[interior_water == 0] = np.uint8(water_median)
+
+    local_avg = cv2.GaussianBlur(filled, (0, 0), sigmaX=40)
+
+    diff = local_avg.astype(np.int16) - gray.astype(np.int16)
+    dark_mask = (diff >= 30).astype(np.uint8) * 255
+
+    return cv2.bitwise_and(dark_mask, interior_water)
+
+
 def average_water_brightness(frame_bgr: np.ndarray, water_mask: np.ndarray) -> int:
     """Compute the average brightness of water pixels."""
     gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)

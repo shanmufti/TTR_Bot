@@ -164,10 +164,15 @@ class App:
         sell_row1 = tk.Frame(sell_outer, bg=bg)
         sell_row1.pack(anchor="w")
 
-        self._sell_path_var = tk.StringVar(value=self._SELL_AUTO)
+        sell_options = self._get_sell_path_options()
+        default_sell = next(
+            (n for n in sell_options if "donalds" in n.lower() or "dreamland" in n.lower()),
+            self._SELL_AUTO,
+        )
+        self._sell_path_var = tk.StringVar(value=default_sell)
         self._sell_path_combo = ttk.Combobox(
             sell_row1, textvariable=self._sell_path_var,
-            values=self._get_sell_path_options(), state="readonly", width=20,
+            values=sell_options, state="readonly", width=20,
         )
         self._sell_path_combo.pack(side="left")
 

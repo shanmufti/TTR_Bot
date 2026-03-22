@@ -188,7 +188,6 @@ def walk_and_sell(location: str, sell_path_file: str | None = None) -> None:
     # Phase 1: walk to fisherman
     log.info("Sell: walking to fisherman (%d events)", len(path_data.get("to_fisherman", [])))
     _replay_events(path_data.get("to_fisherman", []), win)
-    time.sleep(0.5)
 
     # Phase 2: sell fish
     sell_events = path_data.get("sell_actions", [])
@@ -198,12 +197,12 @@ def walk_and_sell(location: str, sell_path_file: str | None = None) -> None:
     else:
         log.info("Sell: no recorded sell actions — using template matching")
         _click_sell_all_template()
-    time.sleep(0.5)
+
+    time.sleep(1.0)
 
     # Phase 3: walk back to dock
     log.info("Sell: walking back to dock (%d events)", len(path_data.get("to_dock", [])))
     _replay_events(path_data.get("to_dock", []), win)
-    time.sleep(0.5)
 
     log.info("Sell trip complete")
 

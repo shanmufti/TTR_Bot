@@ -50,7 +50,73 @@ def _load_template(name: str) -> np.ndarray | None:
 
 def clear_cache() -> None:
     """Clear the template image cache (e.g., after recapturing templates)."""
+    global _global_scale
     _template_cache.clear()
+    _scaled_template_cache.clear()
+    _global_scale = None
+
+
+_SCALE_RANGE = np.arange(0.5, 1.6, 0.1)
+_global_scale: float | None = None
+_scaled_template_cache: dict[str, np.ndarray] = {}
+
+
+def calibrate_scale(frame_bgr: np.ndarray) -> float:
+    """Determine the window scale by matching a known template across scales.
+
+    Call once at startup with a frame that contains the Cast button.
+    All subsequent find_template calls use this single scale.
+    """
+    global _global_scale
+    _scaled_template_cache.clear()
+
+    tmpl = _load_template("red_fishing_button")
+    if tmpl is None:
+        tmpl = _load_template("exit_fishing_button")
+    if tmpl is None:
+        log.warning("calibrate_scale: no calibration template available")
+        _global_scale = 1.0
+        return 1.0
+
+    fh, fw = frame_bgr.shape[:2]
+    th, tw = tmpl.shape[:2]
+    best_val = -1.0
+    best_scale = 1.0
+
+    for scale in _SCALE_RANGE:
+        new_w = int(tw * scale)
+        new_h = int(th * scale)
+        if new_w < 10 or new_h < 10 or new_w > fw or new_h > fh:
+            continue
+        scaled = cv2.resize(tmpl, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+        result = cv2.matchTemplate(frame_bgr, scaled, cv2.TM_CCOEFF_NORMED)
+        _, max_val, _, _ = cv2.minMaxLoc(result)
+        if max_val > best_val:
+            best_val = max_val
+            best_scale = scale
+
+    _global_scale = best_scale
+    log.info("calibrate_scale: best scale=%.1f (conf=%.3f)", best_scale, best_val)
+    return best_scale
+
+
+def _get_scaled_template(name: str) -> np.ndarray | None:
+    """Return the template pre-scaled to the global window scale."""
+    if name in _scaled_template_cache:
+        return _scaled_template_cache[name]
+
+    tmpl = _load_template(name)
+    if tmpl is None:
+        return None
+
+    scale = _global_scale if _global_scale is not None else 1.0
+    if abs(scale - 1.0) > 0.01:
+        new_w = int(tmpl.shape[1] * scale)
+        new_h = int(tmpl.shape[0] * scale)
+        tmpl = cv2.resize(tmpl, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+
+    _scaled_template_cache[name] = tmpl
+    return tmpl
 
 
 def find_template(
@@ -58,12 +124,18 @@ def find_template(
     template_name: str,
     threshold: float = settings.TEMPLATE_MATCH_THRESHOLD,
 ) -> MatchResult | None:
-    """Find a template in the frame using matchTemplate (TM_CCOEFF_NORMED).
+    """Find a template in the frame.
 
-    Returns a MatchResult with the center coordinates and confidence,
-    or None if confidence < threshold.
+    Auto-calibrates on first call if calibrate_scale() hasn't been run.
+    Uses pre-scaled template first; falls back to a multi-scale sweep
+    if the single-scale match is below threshold.
     """
-    tmpl = _load_template(template_name)
+    global _global_scale
+
+    if _global_scale is None:
+        calibrate_scale(frame_bgr)
+
+    tmpl = _get_scaled_template(template_name)
     if tmpl is None:
         return None
 
@@ -75,13 +147,45 @@ def find_template(
     result = cv2.matchTemplate(frame_bgr, tmpl, cv2.TM_CCOEFF_NORMED)
     _, max_val, _, max_loc = cv2.minMaxLoc(result)
 
-    if max_val < threshold:
+    if max_val >= threshold:
+        cx = max_loc[0] + tw // 2
+        cy = max_loc[1] + th // 2
+        return MatchResult(cx, cy, float(max_val), tw, th)
+
+    base_tmpl = _load_template(template_name)
+    if base_tmpl is None:
         return None
 
-    cx = max_loc[0] + tw // 2
-    cy = max_loc[1] + th // 2
+    best_val = max_val
+    best_loc = max_loc
+    best_tw, best_th = tw, th
+    base_scale = _global_scale if _global_scale else 1.0
+    for delta in (-0.2, -0.1, 0.1, 0.2):
+        s = base_scale + delta
+        if s < 0.3 or s > 2.0:
+            continue
+        new_w = int(base_tmpl.shape[1] * s)
+        new_h = int(base_tmpl.shape[0] * s)
+        if new_w < 10 or new_h < 10 or new_w > fw or new_h > fh:
+            continue
+        scaled = cv2.resize(base_tmpl, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+        res = cv2.matchTemplate(frame_bgr, scaled, cv2.TM_CCOEFF_NORMED)
+        _, mv, _, ml = cv2.minMaxLoc(res)
+        if mv > best_val:
+            best_val = mv
+            best_loc = ml
+            best_tw, best_th = new_w, new_h
+            if mv >= threshold:
+                _global_scale = s
+                _scaled_template_cache.clear()
+                break
 
-    return MatchResult(cx, cy, float(max_val), tw, th)
+    if best_val < threshold:
+        return None
+
+    cx = best_loc[0] + best_tw // 2
+    cy = best_loc[1] + best_th // 2
+    return MatchResult(cx, cy, float(best_val), best_tw, best_th)
 
 
 def find_all_templates(

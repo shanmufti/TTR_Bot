@@ -19,15 +19,15 @@ GAME_WINDOW_TITLE = "Toontown Rewritten"
 # ---------------------------------------------------------------------------
 DEFAULT_CASTS = 20
 DEFAULT_SELL_ROUNDS = 3
-DEFAULT_VARIANCE = 20          # pixels of random offset when casting
-CAST_DRAG_DISTANCE = 150       # pixels to drag downward on cast
+DEFAULT_VARIANCE = 15          # pixels of random left/right when casting
+CAST_DRAG_DISTANCE = 150       # base pixels to drag downward (logical)
 CAST_DRAG_HOLD_MS = 500        # hold time during drag (ms)
-BITE_TIMEOUT_S = 30            # max seconds to wait for a bite
+BITE_TIMEOUT_S = 12            # max seconds to wait before recasting
 BITE_POLL_INTERVAL_S = 0.10    # seconds between bite-check polls
-POST_CAST_DELAY_S = 1.5        # wait after cast before polling for bite
-POST_CAST_DELAY_QUICK_S = 0.3  # shorter delay when quick-casting
-POST_CATCH_DELAY_S = 0.5       # wait after catch before closing popup
-BETWEEN_CAST_DELAY_S = 0.5     # wait between successive casts
+POST_CAST_DELAY_S = 1.0        # wait after cast before polling for bite
+POST_CAST_DELAY_QUICK_S = 0.2  # shorter delay when quick-casting
+POST_CATCH_DELAY_S = 0.3       # wait after catch before closing popup
+BETWEEN_CAST_DELAY_S = 1.5     # wait between successive casts (game needs time to reset rod)
 SELL_WALK_DELAY_S = 3.0        # settle time after returning from sell trip
 
 # ---------------------------------------------------------------------------
@@ -80,7 +80,7 @@ BUBBLE_SCAN_STEP = 3           # pixel step when scanning for bubbles
 # ---------------------------------------------------------------------------
 # Vision – template matching
 # ---------------------------------------------------------------------------
-TEMPLATE_MATCH_THRESHOLD = 0.75  # minimum confidence for a template match
+TEMPLATE_MATCH_THRESHOLD = 0.65  # minimum confidence for a template match
 TEMPLATE_NAMES = {
     "red_fishing_button": "Red_Fishing_Button.png",
     "sell_all_button": "Blue_Sell_All_Button.png",
@@ -88,6 +88,7 @@ TEMPLATE_NAMES = {
     "fish_popup_close": "FishPopupCloseButton.png",
     "bucket_full_popup": "FishBucketFullPopup.png",
     "ok_button": "Blue_Ok_Button.png",
+    "jellybean_exit": "JellybeanExitButton.png",
 }
 
 # ---------------------------------------------------------------------------
@@ -100,6 +101,7 @@ PYAUTOGUI_FAILSAFE = True     # move mouse to corner to abort
 # Fishing locations (for sell-walk sequences)
 # ---------------------------------------------------------------------------
 FISHING_LOCATIONS = [
+    "Donalds Dreamland",
     "Fish Anywhere",
     "Estate (Left Dock)",
     "TTC Punchline Place",

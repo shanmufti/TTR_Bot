@@ -34,6 +34,7 @@ TRACKED_KEYS = {
 _events: list[dict] = []
 _phase_done = threading.Event()
 _start_time: float = 0.0
+_held_keys: set[str] = set()
 
 
 def _ts() -> float:
@@ -51,13 +52,17 @@ def _on_key_press(key):
 
     if key in TRACKED_KEYS:
         name = key.name  # "up", "down", "left", "right"
-        _events.append({"t": _ts(), "type": "key_down", "key": name})
+        if name not in _held_keys:
+            _held_keys.add(name)
+            _events.append({"t": _ts(), "type": "key_down", "key": name})
 
 
 def _on_key_release(key):
     if key in TRACKED_KEYS:
         name = key.name
-        _events.append({"t": _ts(), "type": "key_up", "key": name})
+        if name in _held_keys:
+            _held_keys.discard(name)
+            _events.append({"t": _ts(), "type": "key_up", "key": name})
 
 
 # ---------------------------------------------------------------------------
@@ -84,6 +89,7 @@ def _record_phase(phase_name: str) -> list[dict]:
     global _events, _start_time
 
     _events = []
+    _held_keys.clear()
     _phase_done.clear()
     _start_time = time.time()
 
@@ -109,56 +115,60 @@ def _record_phase(phase_name: str) -> list[dict]:
 # Main
 # ---------------------------------------------------------------------------
 
+_phase_start = threading.Event()
+
+
+def _wait_for_f7():
+    """Block until F7 is pressed (starts/advances recording)."""
+    _phase_start.clear()
+
+    def _on_press(key):
+        if key == keyboard.Key.f7:
+            _phase_start.set()
+            return False  # stop listener
+
+    with keyboard.Listener(on_press=_on_press):
+        _phase_start.wait()
+
+
 def main():
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--name", default="", help="Pre-fill the path name")
+    parser.add_argument("--name", required=True, help="Name for this sell path")
     args = parser.parse_args()
+    name = args.name
 
     print("=" * 60)
     print("  TTR Bot — Sell Path Recorder")
+    print(f"  Location: {name}")
     print("=" * 60)
     print()
-    print("  This records your walk to the fisherman and back.")
-    print("  You'll record 3 phases, pressing F8 after each one.")
+    print("  Controls:  F7 = start next phase")
+    print("             F8 = end current phase")
     print()
-    print("  Prerequisites:")
-    print("    - Your toon must be at the fishing dock (just exited fishing)")
-    print("    - TTR must be the focused window during recording")
+    print("  Focus TTR and use arrow keys / mouse. No need to switch back here.")
     print()
 
-    if args.name:
-        print(f"  Location: {args.name}")
-        confirm = input(f"  Use '{args.name}' as the path name? [Y/n]: ").strip().lower()
-        name = args.name if confirm in ("", "y", "yes") else ""
-    else:
-        name = ""
+    phases = [
+        ("1/3", "WALK TO FISHERMAN",
+         "Walk toward the fisherman NPC until the sell dialog opens."),
+        ("2/3", "SELL FISH",
+         "Click Sell All and dismiss any dialogs."),
+        ("3/3", "WALK BACK TO DOCK",
+         "Walk back to the dock and sit down to fish."),
+    ]
 
-    if not name:
-        name = input("  Name for this path (e.g. 'Estate Left Dock'): ").strip()
-    if not name:
-        print("  Aborted — no name given.")
-        return
+    results: list[list[dict]] = []
+    for step, title, desc in phases:
+        print(f"  Phase {step}: {title}")
+        print(f"    {desc}")
+        print(f"    >>> Press F7 in TTR to START recording <<<")
+        _wait_for_f7()
+        print(f"    Recording... (press F8 to stop)")
+        events = _record_phase(title)
+        results.append(events)
+        print()
 
-    print()
-    print("  Phase 1/3: WALK TO FISHERMAN")
-    print("  Walk from the dock to the fisherman NPC.")
-    input("  Press Enter to start recording, then F8 when you reach the fisherman...")
-    to_fisherman = _record_phase("Walk to fisherman")
-
-    print()
-    print("  Phase 2/3: SELL FISH")
-    print("  Click on the fisherman, click Sell All, dismiss any dialogs.")
-    input("  Press Enter to start recording, then F8 when selling is done...")
-    sell_actions = _record_phase("Sell fish")
-
-    print()
-    print("  Phase 3/3: WALK BACK TO DOCK")
-    print("  Walk back to the dock and sit down to fish again.")
-    input("  Press Enter to start recording, then F8 when you're back at the dock...")
-    to_dock = _record_phase("Walk back to dock")
-
-    # Save
     os.makedirs(SELL_PATHS_DIR, exist_ok=True)
     safe_name = name.replace(" ", "_").replace("/", "-")
     filename = f"{safe_name}.json"
@@ -166,18 +176,17 @@ def main():
 
     data = {
         "name": name,
-        "to_fisherman": to_fisherman,
-        "sell_actions": sell_actions,
-        "to_dock": to_dock,
+        "to_fisherman": results[0],
+        "sell_actions": results[1],
+        "to_dock": results[2],
     }
 
     with open(path, "w") as f:
         json.dump(data, f, indent=2)
 
-    print(f"\n  Saved → {path}")
-    print(f"  ({len(to_fisherman)} + {len(sell_actions)} + {len(to_dock)} events)")
-    print()
-    print("  To use this path, select it in the bot GUI or set it in config.")
+    total = sum(len(r) for r in results)
+    print(f"  Saved → {path}")
+    print(f"  ({len(results[0])} + {len(results[1])} + {len(results[2])} = {total} events)")
     print("=" * 60)
 
 
