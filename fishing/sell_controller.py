@@ -1,14 +1,11 @@
-"""Sell controller — replays recorded walk paths to sell fish and return.
+"""Sell controller — vision-based navigation to sell fish and return.
 
-Sell paths are JSON files in the sell_paths/ directory, recorded via
-record_sell_path.py. Each file contains three phases of timed events:
-
-  to_fisherman  — walk from dock to the fisherman NPC
-  sell_actions   — click Sell All, dismiss dialogs
-  to_dock        — walk back to the dock and sit down
-
-Events are {t, type, key/x/y} dicts recorded with millisecond timestamps.
-The replay engine sleeps between events to reproduce the original timing.
+Uses screen detection to:
+  1. Turn the toon until the fisherman NPC is in view
+  2. Walk toward the fisherman until the sell dialog auto-opens
+  3. Click to sell
+  4. Turn until the pond is in view
+  5. Walk back to the dock until the fishing UI (cast button) appears
 """
 
 from __future__ import annotations
@@ -17,30 +14,33 @@ import json
 import os
 import time
 
+import cv2
+import numpy as np
 import pyautogui
 
 from config.settings import PROJECT_ROOT
 from core import input_controller as inp
 from core.screen_capture import capture_window
-from core.window_manager import find_ttr_window, WindowInfo
+from core.window_manager import find_ttr_window, focus_window, WindowInfo
 from vision.template_matcher import find_template
+from vision.pond_detector import detect_pond
 from utils.logger import log
 
 SELL_PATHS_DIR = os.path.join(PROJECT_ROOT, "sell_paths")
 
+_TURN_STEP_S = 0.35
+_WALK_POLL_S = 0.5
+_MAX_TURN_STEPS = 20
+_MAX_WALK_S = 15
+
 
 # ---------------------------------------------------------------------------
-# Path discovery
+# Path discovery (kept for backward compat with GUI)
 # ---------------------------------------------------------------------------
 
 def list_sell_paths() -> list[dict]:
-    """Return metadata for every recorded sell path.
-
-    Each entry: {"name": "...", "filename": "...", "path": "/abs/..."}.
-    """
     if not os.path.isdir(SELL_PATHS_DIR):
         return []
-
     paths: list[dict] = []
     for fname in sorted(os.listdir(SELL_PATHS_DIR)):
         if not fname.endswith(".json"):
@@ -49,18 +49,13 @@ def list_sell_paths() -> list[dict]:
         try:
             with open(full) as f:
                 data = json.load(f)
-            paths.append({
-                "name": data.get("name", fname),
-                "filename": fname,
-                "path": full,
-            })
+            paths.append({"name": data.get("name", fname), "filename": fname, "path": full})
         except Exception:
             continue
     return paths
 
 
 def load_sell_path(filepath: str) -> dict | None:
-    """Load a sell path JSON file."""
     try:
         with open(filepath) as f:
             return json.load(f)
@@ -70,151 +65,237 @@ def load_sell_path(filepath: str) -> dict | None:
 
 
 # ---------------------------------------------------------------------------
-# Event replay engine
+# Vision helpers
 # ---------------------------------------------------------------------------
 
-def _replay_events(events: list[dict], win: WindowInfo | None = None) -> None:
-    """Replay a list of recorded input events with original timing.
+def _detect_npc_label(frame: np.ndarray) -> tuple[int, int] | None:
+    """Detect an NPC name tag (orange text) in the frame.
 
-    Sleeps between events to match the delta-t from the recording.
+    Returns (cx, cy) of the best orange text cluster that looks like
+    an NPC label, or None if not found. Filters aggressively:
+    - Only looks in the middle third of the screen (vertically)
+    - Requires multiple small orange blobs clustered together (text chars)
+    - Rejects large solid orange regions (fences, hats, etc.)
     """
-    if not events:
-        return
+    h, w = frame.shape[:2]
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    mask = cv2.inRange(hsv, np.array([8, 150, 180]), np.array([22, 255, 255]))
 
-    if win is None:
-        win = find_ttr_window()
+    y_start = h // 4
+    y_end = 3 * h // 4
+    roi = mask[y_start:y_end, :]
 
-    prev_t = 0.0
-    held_keys: set[str] = set()
+    contours, _ = cv2.findContours(roi, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        return None
 
-    for ev in events:
-        t = ev.get("t", 0.0)
-        delta = t - prev_t
-        if delta > 0.01:
-            time.sleep(delta)
-        prev_t = t
+    text_clusters: list[tuple[int, int, int, int, int]] = []
+    for c in contours:
+        area = cv2.contourArea(c)
+        x, y, cw, ch = cv2.boundingRect(c)
+        aspect = cw / max(1, ch)
+        if 20 < area < 2000 and 0.2 < aspect < 8.0 and ch < 60:
+            text_clusters.append((x, y, cw, ch, area))
 
-        ev_type = ev.get("type", "")
+    if len(text_clusters) < 3:
+        return None
 
-        if ev_type == "key_down":
-            key = ev.get("key", "")
-            if key and key not in held_keys:
-                pyautogui.keyDown(key)
-                held_keys.add(key)
+    text_clusters.sort(key=lambda t: t[0])
+    best_group: list[tuple[int, int, int, int, int]] = []
+    for i, blob in enumerate(text_clusters):
+        group = [blob]
+        bx, by = blob[0], blob[1]
+        for other in text_clusters[i + 1:]:
+            if abs(other[1] - by) < 30 and abs(other[0] - bx) < 300:
+                group.append(other)
+                bx = other[0]
+        if len(group) > len(best_group):
+            best_group = group
 
-        elif ev_type == "key_up":
-            key = ev.get("key", "")
-            if key and key in held_keys:
-                pyautogui.keyUp(key)
-                held_keys.discard(key)
+    if len(best_group) < 3:
+        return None
 
-        elif ev_type == "mouse_down":
-            x, y = ev.get("x", 0), ev.get("y", 0)
-            if win:
-                pyautogui.moveTo(win.x + x, win.y + y)
-            pyautogui.mouseDown()
+    xs = [b[0] + b[2] // 2 for b in best_group]
+    ys = [b[1] + b[3] // 2 for b in best_group]
+    cx = sum(xs) // len(xs)
+    cy = y_start + sum(ys) // len(ys)
+    return cx, cy
 
-        elif ev_type == "mouse_up":
-            x, y = ev.get("x", 0), ev.get("y", 0)
-            if win:
-                pyautogui.moveTo(win.x + x, win.y + y)
-            pyautogui.mouseUp()
 
-    # Safety: release any keys still held
-    for key in held_keys:
-        pyautogui.keyUp(key)
+def _detect_pond_center(frame: np.ndarray) -> tuple[int, int] | None:
+    """Detect the pond (blue water) and return its center position."""
+    pond = detect_pond(frame)
+    if pond.empty:
+        return None
+    return pond.x + pond.width // 2, pond.y + pond.height // 2
+
+
+def _has_sell_dialog(frame: np.ndarray) -> bool:
+    """Check if the fisherman sell dialog is on screen.
+
+    Only uses template matching for known dialog buttons.
+    """
+    if find_template(frame, "fish_popup_close") is not None:
+        return True
+    if find_template(frame, "jellybean_exit") is not None:
+        return True
+    return False
+
+
+def _has_cast_button(frame: np.ndarray) -> bool:
+    """Check if the red fishing cast button is visible (means we're on the dock)."""
+    return find_template(frame, "red_fishing_button") is not None
 
 
 # ---------------------------------------------------------------------------
-# Sell-all helper (template-based fallback for the sell phase)
+# Navigation primitives
 # ---------------------------------------------------------------------------
 
-def _click_sell_all_template() -> None:
-    """Find and click the Sell All button using template matching."""
-    win = find_ttr_window()
-    if win is None:
-        return
-    for _ in range(20):
+def _turn_toward(win: WindowInfo, detector, direction: str = "right") -> bool:
+    """Turn the toon until detector(frame) returns a truthy value.
+
+    Returns True if the target was found, False after a full rotation.
+    """
+    null_frames = 0
+    for step in range(_MAX_TURN_STEPS):
         frame = capture_window(win)
         if frame is None:
+            null_frames += 1
+            if null_frames > 5:
+                log.warning("Game window lost during turn")
+                return False
             time.sleep(0.3)
             continue
-        match = find_template(frame, "sell_all_button")
-        if match is not None:
-            inp.click(match.x, match.y, window=win)
-            time.sleep(1.5)
-            frame2 = capture_window(win)
-            if frame2 is not None:
-                ok = find_template(frame2, "ok_button")
-                if ok is not None:
-                    inp.click(ok.x, ok.y, window=win)
-                    time.sleep(0.5)
-            return
-        time.sleep(0.3)
-    log.warning("Sell All button not found via template matching")
+        null_frames = 0
+
+        result = detector(frame)
+        if result:
+            log.info("Target found after %d turn steps", step)
+            return True
+
+        pyautogui.keyDown(direction)
+        time.sleep(_TURN_STEP_S)
+        pyautogui.keyUp(direction)
+        time.sleep(0.15)
+
+    log.warning("Target not found after %d turn steps", _MAX_TURN_STEPS)
+    return False
+
+
+def _walk_forward_until(win: WindowInfo, condition, max_seconds: float = _MAX_WALK_S) -> bool:
+    """Walk forward (Up key) until condition(frame) returns True."""
+    null_frames = 0
+    pyautogui.keyDown("up")
+    start = time.monotonic()
+    try:
+        while time.monotonic() - start < max_seconds:
+            time.sleep(_WALK_POLL_S)
+            frame = capture_window(win)
+            if frame is None:
+                null_frames += 1
+                if null_frames > 5:
+                    log.warning("Game window lost during walk")
+                    return False
+                continue
+            null_frames = 0
+            if condition(frame):
+                log.info("Walk condition met after %.1fs", time.monotonic() - start)
+                return True
+    finally:
+        pyautogui.keyUp("up")
+    log.warning("Walk condition not met after %.1fs", max_seconds)
+    return False
 
 
 # ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
 
-def walk_and_sell(location: str, sell_path_file: str | None = None) -> None:
-    """Execute a sell trip.
+def walk_and_sell(location: str, sell_path_file: str | None = None) -> None:  # noqa: ARG001
+    """Execute a sell trip using vision-based navigation.
 
-    If *sell_path_file* is given (absolute path to a JSON), that recorded
-    path is replayed. Otherwise falls back to auto-discovering a matching
-    path from sell_paths/ by location name.
+    1. Turn until fisherman NPC label is visible
+    2. Walk toward fisherman until sell dialog auto-opens
+    3. Click to sell
+    4. Turn until pond is visible
+    5. Walk back to dock until cast button appears
     """
     log.info("Starting sell trip — location='%s'", location)
-
-    # Resolve the sell path JSON
-    path_data = None
-    if sell_path_file and os.path.isfile(sell_path_file):
-        path_data = load_sell_path(sell_path_file)
-
-    if path_data is None:
-        path_data = _find_path_by_name(location)
-
-    if path_data is None:
-        log.warning("No recorded sell path for '%s' — attempting template-only sell", location)
-        _click_sell_all_template()
-        return
 
     win = find_ttr_window()
     if win is None:
         log.warning("TTR window not found for sell trip")
         return
 
-    # Phase 1: walk to fisherman
-    log.info("Sell: walking to fisherman (%d events)", len(path_data.get("to_fisherman", [])))
-    _replay_events(path_data.get("to_fisherman", []), win)
+    focus_window()
+    time.sleep(0.3)
+
+    # Phase 1: find and walk to fisherman
+    log.info("Sell: turning to find fisherman…")
+    found = _turn_toward(win, _detect_npc_label)
+    if not found:
+        log.warning("Could not find fisherman NPC — trying to walk anyway")
+
+    log.info("Sell: walking to fisherman…")
+    dialog_opened = _walk_forward_until(win, _has_sell_dialog, max_seconds=10)
+
+    if not dialog_opened:
+        log.warning("Sell dialog did not open — retrying with wider search")
+        for retry_dir in ["left", "right", "left"]:
+            _turn_toward(win, _detect_npc_label, direction=retry_dir)
+            dialog_opened = _walk_forward_until(win, _has_sell_dialog, max_seconds=8)
+            if dialog_opened:
+                break
+
+    if not dialog_opened:
+        log.warning("Sell dialog never appeared — aborting sell trip")
+        return
 
     # Phase 2: sell fish
-    sell_events = path_data.get("sell_actions", [])
-    if sell_events:
-        log.info("Sell: replaying sell actions (%d events)", len(sell_events))
-        _replay_events(sell_events, win)
-    else:
-        log.info("Sell: no recorded sell actions — using template matching")
-        _click_sell_all_template()
-
+    log.info("Sell: dialog detected, clicking to sell…")
+    time.sleep(0.5)
+    _click_sell_dialog(win)
     time.sleep(1.0)
 
-    # Phase 3: walk back to dock
-    log.info("Sell: walking back to dock (%d events)", len(path_data.get("to_dock", [])))
-    _replay_events(path_data.get("to_dock", []), win)
+    # Phase 3: find and walk back to dock
+    log.info("Sell: turning to find pond/dock…")
+    focus_window()
+    found = _turn_toward(win, _detect_pond_center)
+    if not found:
+        log.warning("Could not find pond — walking blindly")
 
-    log.info("Sell trip complete")
+    log.info("Sell: walking to dock…")
+    on_dock = _walk_forward_until(win, _has_cast_button, max_seconds=12)
+
+    if not on_dock:
+        log.info("Cast button not found — trying alternate directions")
+        for retry_dir in ["left", "right"]:
+            _turn_toward(win, _detect_pond_center, direction=retry_dir)
+            on_dock = _walk_forward_until(win, _has_cast_button, max_seconds=8)
+            if on_dock:
+                break
+
+    log.info("Sell trip complete (on_dock=%s)", on_dock)
 
 
-def _find_path_by_name(location: str) -> dict | None:
-    """Try to find a sell path whose 'name' field matches the location."""
-    for entry in list_sell_paths():
-        if entry["name"].lower() == location.lower():
-            return load_sell_path(entry["path"])
-    # Also try matching the filename stem
-    safe = location.replace(" ", "_").replace("/", "-")
-    candidate = os.path.join(SELL_PATHS_DIR, f"{safe}.json")
-    if os.path.isfile(candidate):
-        return load_sell_path(candidate)
-    return None
+def _click_sell_dialog(win: WindowInfo) -> None:
+    """Click the sell button in the fisherman's dialog."""
+    for _ in range(10):
+        frame = capture_window(win)
+        if frame is None:
+            time.sleep(0.3)
+            continue
+
+        close = find_template(frame, "fish_popup_close")
+        if close is not None:
+            inp.ensure_focused()
+            time.sleep(0.1)
+            inp.click(close.x, close.y, window=win)
+            time.sleep(0.5)
+            continue
+
+        if not _has_sell_dialog(frame):
+            return
+
+        time.sleep(0.3)
+    log.warning("Could not dismiss sell dialog")

@@ -49,7 +49,8 @@ class App:
     def __init__(self) -> None:
         self._root = tk.Tk()
         self._root.title("TTR Fishing Bot")
-        self._root.geometry("520x690")
+        screen_w = self._root.winfo_screenwidth()
+        self._root.geometry(f"520x690+{screen_w - 540}+30")
         self._root.resizable(False, False)
         self._root.configure(bg="#0f3460")
 
@@ -178,13 +179,13 @@ class App:
 
         tk.Button(
             sell_row1, text="Record", font=("Helvetica", 9),
-            fg="#ffffff", bg="#533483", activebackground="#442b6e",
+            highlightbackground="#533483",
             command=self._on_record_sell_path,
         ).pack(side="left", padx=(6, 0))
 
         tk.Button(
             sell_row1, text="↻", font=("Helvetica", 9),
-            fg=fg, bg=entry_bg, width=2,
+            highlightbackground=entry_bg, width=2,
             command=self._refresh_sell_paths,
         ).pack(side="left", padx=(4, 0))
 
@@ -200,11 +201,6 @@ class App:
         checks_frame = tk.Frame(settings_frame, bg=bg)
         checks_frame.grid(row=row, column=0, columnspan=2, sticky="w", padx=8, pady=3)
 
-        self._autodetect_var = tk.BooleanVar(value=False)
-        tk.Checkbutton(
-            checks_frame, text="Auto-detect fish", variable=self._autodetect_var,
-            fg=fg, bg=bg, selectcolor=entry_bg, activebackground=bg, activeforeground=fg,
-        ).pack(side="left", padx=(0, 12))
 
         self._quickcast_var = tk.BooleanVar(value=False)
         tk.Checkbutton(
@@ -220,29 +216,65 @@ class App:
         ).pack(side="left")
 
         # ---- Buttons ----
+        style = ttk.Style()
+        style.configure("Green.TButton", font=("Helvetica", 12, "bold"))
+        style.configure("Red.TButton", font=("Helvetica", 12, "bold"))
+        style.configure("Purple.TButton", font=("Helvetica", 11))
+        style.configure("Blue.TButton", font=("Helvetica", 11))
+        style.configure("Gold.TButton", font=("Helvetica", 11))
+
         btn_frame = tk.Frame(root, bg=bg)
         btn_frame.pack(fill="x", padx=12, pady=8)
 
         self._start_btn = tk.Button(
-            btn_frame, text="Start Fishing", font=("Helvetica", 12, "bold"),
-            fg="#ffffff", bg="#1a8f3c", activebackground="#15722f",
-            width=16, command=self._on_start,
+            btn_frame, text="▶ Start Fishing", font=("Helvetica", 12, "bold"),
+            highlightbackground="#1a8f3c", width=16, command=self._on_start,
         )
         self._start_btn.pack(side="left", padx=(0, 8))
 
         self._stop_btn = tk.Button(
-            btn_frame, text="Stop", font=("Helvetica", 12, "bold"),
-            fg="#ffffff", bg=accent, activebackground="#c93a52",
-            width=10, command=self._on_stop, state="disabled",
+            btn_frame, text="■ Stop", font=("Helvetica", 12, "bold"),
+            highlightbackground=accent, width=10, command=self._on_stop, state="disabled",
         )
         self._stop_btn.pack(side="left", padx=(0, 8))
 
         self._pause_btn = tk.Button(
             btn_frame, text="Pause", font=("Helvetica", 11),
-            fg=fg, bg="#533483", activebackground="#442b6e",
-            width=8, command=self._on_pause, state="disabled",
+            highlightbackground="#533483", width=8,
+            command=self._on_pause, state="disabled",
         )
         self._pause_btn.pack(side="left")
+
+        # ---- Calibrate / Test buttons ----
+        test_frame = tk.Frame(root, bg=bg)
+        test_frame.pack(fill="x", padx=12, pady=(0, 8))
+
+        self._calibrate_btn = tk.Button(
+            test_frame, text="Calibrate Window", font=("Helvetica", 11),
+            highlightbackground="#2980b9", width=16, command=self._on_calibrate,
+        )
+        self._calibrate_btn.pack(side="left", padx=(0, 8))
+
+        self._test_sell_btn = tk.Button(
+            test_frame, text="Test Sell Trip", font=("Helvetica", 11),
+            highlightbackground="#b8860b", width=14, command=self._on_test_sell,
+        )
+        self._test_sell_btn.pack(side="left")
+
+        # ---- Cast calibration button ----
+        cast_cal_frame = tk.Frame(root, bg=bg)
+        cast_cal_frame.pack(fill="x", padx=12, pady=(0, 8))
+
+        self._cast_cal_btn = tk.Button(
+            cast_cal_frame, text="Calibrate Cast", font=("Helvetica", 11),
+            highlightbackground="#e67e22", width=16, command=self._on_calibrate_cast,
+        )
+        self._cast_cal_btn.pack(side="left", padx=(0, 8))
+
+        self._cast_cal_status = tk.Label(
+            cast_cal_frame, text="", font=("Helvetica", 10), fg="#e67e22", bg=bg,
+        )
+        self._cast_cal_status.pack(side="left")
 
         # ---- Log output ----
         log_label = tk.Label(
@@ -275,6 +307,24 @@ class App:
         if self._bot.running:
             return
 
+        # --- Auto-calibrate window before fishing ---
+        self._status_var.set("Calibrating…")
+        self._root.update_idletasks()
+        self._on_calibrate()
+
+        from vision.template_matcher import _global_scale
+        if _global_scale is None:
+            self._status_var.set("Calibration failed — sit on dock first!")
+            return
+
+        # --- Load cast calibration ---
+        from core.cast_calibration import cast_calibration
+        if not cast_calibration.is_calibrated:
+            cast_calibration.load()
+        if not cast_calibration.is_calibrated:
+            self._status_var.set("Run Calibrate Cast first!")
+            return
+
         # Resolve sell path file — explicit selection or auto-match by location
         sell_path_file = None
         sell_choice = self._sell_path_var.get()
@@ -290,7 +340,7 @@ class App:
             casts_per_round=self._casts_var.get(),
             sell_rounds=self._sells_var.get(),
             variance=self._variance_var.get(),
-            auto_detect=self._autodetect_var.get(),
+            auto_detect=True,
             quick_cast=self._quickcast_var.get(),
             bite_timeout=float(self._timeout_var.get()),
             sell_path_file=sell_path_file,
@@ -316,6 +366,193 @@ class App:
         self._bot.toggle_pause()
         text = "Resume" if self._bot.paused else "Pause"
         self._pause_btn.config(text=text)
+
+    def _on_calibrate(self) -> None:
+        """Detect the current TTR window bounds and lock them for the session."""
+        from core.window_manager import find_ttr_window, set_calibrated_bounds
+        from vision.template_matcher import clear_cache, calibrate_scale
+        from core.screen_capture import capture_window
+
+        win = find_ttr_window()
+        if win is None:
+            log.warning("Calibration failed: TTR window not found")
+            self._status_var.set("Calibration failed — TTR not found")
+            return
+
+        set_calibrated_bounds(win.x, win.y, win.width, win.height)
+        log.info("Window locked: %dx%d at (%d,%d)", win.width, win.height, win.x, win.y)
+
+        clear_cache()
+        frame = capture_window(win)
+        if frame is None:
+            log.warning("Could not capture frame — check Screen Recording permission")
+            self._status_var.set("Calibration failed — capture error")
+            return
+
+        scale = calibrate_scale(frame)
+        if scale < 0:
+            self._status_var.set("Calibration failed — sit on dock first!")
+        else:
+            self._status_var.set(f"Calibrated: {win.width}×{win.height} scale={scale:.1f}")
+
+    def _on_calibrate_cast(self) -> None:
+        """Fully automatic cast calibration — bot casts 3 times and detects landings."""
+        import threading
+
+        def _run() -> None:
+            import time
+            from core.window_manager import find_ttr_window, focus_window
+            from core.screen_capture import capture_window
+            from core.input_controller import fishing_cast_raw, ensure_focused
+            from vision.template_matcher import find_template
+            from vision.pond_detector import detect_pond
+            from core.cast_calibration import (
+                CastCalibration, CalibrationSample, CALIBRATION_DRAGS,
+                cast_calibration, detect_bobber,
+            )
+
+            self._cast_cal_btn.config(state="disabled")
+            total = len(CALIBRATION_DRAGS)
+
+            win = find_ttr_window()
+            if win is None:
+                self._cast_cal_status.config(text="TTR not found")
+                self._cast_cal_btn.config(state="normal")
+                return
+
+            focus_window()
+            time.sleep(0.3)
+
+            frame = capture_window(win)
+            if frame is None:
+                self._cast_cal_status.config(text="Capture failed")
+                self._cast_cal_btn.config(state="normal")
+                return
+
+            btn = find_template(frame, "red_fishing_button")
+            if btn is None:
+                self._cast_cal_status.config(text="Sit on dock first!")
+                self._cast_cal_btn.config(state="normal")
+                return
+
+            pond = detect_pond(frame)
+            if pond.empty:
+                self._cast_cal_status.config(text="Pond not detected")
+                self._cast_cal_btn.config(state="normal")
+                return
+
+            new_cal = CastCalibration()
+
+            for idx, (drag_dx, drag_dy) in enumerate(CALIBRATION_DRAGS):
+                label = f"Auto-casting {idx + 1}/{total}…"
+                self._cast_cal_status.config(text=label)
+                log.info("Cast calibration: %s drag=(%+d,%+d)", label, drag_dx, drag_dy)
+
+                # Capture before frame
+                before = capture_window(win)
+                if before is None:
+                    log.warning("Cast calibration: capture failed on cast %d", idx + 1)
+                    continue
+
+                # Re-detect button (may shift after previous cast)
+                new_btn = find_template(before, "red_fishing_button")
+                if new_btn is not None:
+                    btn = new_btn
+                else:
+                    log.warning("Cast button not found for calibration cast %d", idx + 1)
+                    continue
+
+                # Perform the cast with known drag
+                ensure_focused()
+                fishing_cast_raw(btn.x, btn.y, drag_dx, drag_dy, window=win)
+
+                # Wait for bobber to settle
+                time.sleep(2.0)
+
+                # Capture after frame and detect bobber
+                after = capture_window(win)
+                if after is None:
+                    log.warning("Cast calibration: post-cast capture failed")
+                    continue
+
+                landing = detect_bobber(
+                    before, after, pond.x, pond.y, pond.width, pond.height,
+                )
+                if landing is None:
+                    log.warning("Cast calibration: bobber not detected for cast %d", idx + 1)
+                    # Wait for timeout/bite before next cast
+                    self._cast_cal_status.config(text=f"Bobber not found ({idx + 1}/{total})")
+                    time.sleep(12.0)
+                    continue
+
+                bx, by = landing
+                land_dx = float(bx - btn.x)
+                land_dy = float(by - btn.y)
+                new_cal.add_sample(CalibrationSample(drag_dx, drag_dy, land_dx, land_dy))
+
+                # Wait for the bite timeout / catch popup to clear before next cast
+                self._cast_cal_status.config(text=f"Waiting for reset ({idx + 1}/{total})…")
+                deadline = time.monotonic() + 15.0
+                while time.monotonic() < deadline:
+                    time.sleep(0.5)
+                    f = capture_window(win)
+                    if f is not None and find_template(f, "red_fishing_button") is not None:
+                        break
+                time.sleep(0.5)
+
+            if new_cal.sample_count >= 2 and new_cal.fit():
+                cast_calibration._samples = new_cal._samples
+                cast_calibration._matrix = new_cal._matrix
+                cast_calibration.save()
+                self._cast_cal_status.config(text="Cast calibration complete!")
+                log.info("Cast calibration complete (%d samples)", new_cal.sample_count)
+            else:
+                self._cast_cal_status.config(
+                    text=f"Calibration failed ({new_cal.sample_count} samples)"
+                )
+
+            self._cast_cal_btn.config(state="normal")
+
+        threading.Thread(target=_run, daemon=True).start()
+
+    def _on_test_sell(self) -> None:
+        """Run a test sell trip in a background thread (calibrate + sell)."""
+        import threading
+
+        def _run():
+            try:
+                from core.window_manager import find_ttr_window, focus_window
+                from core.screen_capture import capture_window
+                from vision.template_matcher import calibrate_scale, clear_cache
+                from fishing.sell_controller import walk_and_sell
+
+                self._test_sell_btn.config(state="disabled", text="Running…")
+                log.info("Test sell: starting…")
+
+                focus_window()
+                import time
+                time.sleep(0.3)
+                win = find_ttr_window()
+                if win is None:
+                    log.warning("Test sell: TTR window not found")
+                    return
+
+                clear_cache()
+                frame = capture_window(win)
+                if frame is not None:
+                    calibrate_scale(frame)
+
+                location = self._location_var.get()
+                walk_and_sell(location)
+                log.info("Test sell: complete")
+            except Exception as exc:
+                log.exception("Test sell failed: %s", exc)
+            finally:
+                self._root.after(0, lambda: self._test_sell_btn.config(
+                    state="normal", text="Test Sell Trip",
+                ))
+
+        threading.Thread(target=_run, daemon=True).start()
 
     def _get_sell_path_options(self) -> list[str]:
         """Build the dropdown list of sell paths."""

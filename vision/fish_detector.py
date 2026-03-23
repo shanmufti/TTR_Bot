@@ -87,24 +87,29 @@ def detect_fish_shadows(frame_bgr: np.ndarray, pond: PondArea) -> list[FishCandi
     )
 
     candidates: list[FishCandidate] = []
+    rejected = {"area": 0, "size": 0, "aspect": 0, "fill": 0, "water": 0}
     for label_id in range(1, num_labels):
         area = stats[label_id, cv2.CC_STAT_AREA]
         if area < SHADOW_MIN_AREA or area > SHADOW_MAX_AREA:
+            rejected["area"] += 1
             continue
 
         bw = stats[label_id, cv2.CC_STAT_WIDTH]
         bh = stats[label_id, cv2.CC_STAT_HEIGHT]
         if bw < settings.SHADOW_MIN_SIZE or bh < settings.SHADOW_MIN_SIZE:
+            rejected["size"] += 1
             continue
 
         if bw == 0 or bh == 0:
             continue
         aspect = bw / bh
         if aspect < settings.SHADOW_MIN_ASPECT or aspect > settings.SHADOW_MAX_ASPECT:
+            rejected["aspect"] += 1
             continue
 
         fill = area / max(1, bw * bh)
         if fill < settings.SHADOW_MIN_FILL:
+            rejected["fill"] += 1
             continue
 
         blob_cx = int(centroids[label_id][0])
@@ -113,13 +118,21 @@ def detect_fish_shadows(frame_bgr: np.ndarray, pond: PondArea) -> list[FishCandi
         frame_cy = inner_y + blob_cy
 
         if not _is_surrounded_by_water(frame_bgr, frame_cx, frame_cy):
+            rejected["water"] += 1
             continue
 
         score = min(1.0, fill * (area / 500.0))
         candidates.append(FishCandidate(frame_cx, frame_cy, area, score))
+        log.info(
+            "  shadow candidate: (%d,%d) area=%d %dx%d aspect=%.1f fill=%.2f score=%.2f",
+            frame_cx, frame_cy, area, bw, bh, aspect, fill, score,
+        )
 
     candidates.sort(key=lambda c: c.size, reverse=True)
-    log.debug("detect_fish_shadows: %d candidates from %d labels", len(candidates), num_labels - 1)
+    log.info(
+        "detect_fish_shadows: %d candidates, %d labels, rejected: %s",
+        len(candidates), num_labels - 1, rejected,
+    )
     return candidates
 
 
@@ -131,6 +144,7 @@ def find_best_fish(frame_bgr: np.ndarray, pond: PondArea) -> tuple[int, int] | N
     """
     candidates = detect_fish_shadows(frame_bgr, pond)
     if not candidates:
+        log.info("find_best_fish: no shadows found")
         return None
 
     pond_cx = pond.x + pond.width // 2
@@ -142,5 +156,9 @@ def find_best_fish(frame_bgr: np.ndarray, pond: PondArea) -> tuple[int, int] | N
 
     candidates.sort(key=_reachability)
     best = candidates[0]
-    log.debug("find_best_fish: (%d, %d) size=%d score=%.2f", best.cx, best.cy, best.size, best.score)
+    log.info(
+        "find_best_fish: picking (%d,%d) size=%d score=%.2f  (pond %dx%d at %d,%d)",
+        best.cx, best.cy, best.size, best.score,
+        pond.width, pond.height, pond.x, pond.y,
+    )
     return (best.cx, best.cy)

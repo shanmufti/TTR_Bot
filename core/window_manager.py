@@ -20,11 +20,28 @@ class WindowInfo(NamedTuple):
     height: int
 
 
+_calibrated_bounds: dict | None = None
+
+
+def set_calibrated_bounds(x: int, y: int, width: int, height: int) -> None:
+    """Lock the window bounds to a calibrated position/size."""
+    global _calibrated_bounds
+    _calibrated_bounds = {"x": x, "y": y, "width": width, "height": height}
+    log.info("Window bounds locked: %dx%d at (%d,%d)", width, height, x, y)
+
+
+def clear_calibrated_bounds() -> None:
+    """Remove calibrated bounds, revert to auto-detection."""
+    global _calibrated_bounds
+    _calibrated_bounds = None
+
+
 def find_ttr_window() -> WindowInfo | None:
     """Find the Toontown Rewritten window via CGWindowListCopyWindowInfo.
 
-    Returns WindowInfo with the window ID, PID, and screen-space bounds,
-    or None if the game window is not found.
+    If calibrated bounds are set, the position/size from calibration
+    is used instead of the live window bounds. The window_id and pid
+    are still detected live.
     """
     window_list = Quartz.CGWindowListCopyWindowInfo(
         Quartz.kCGWindowListOptionOnScreenOnly | Quartz.kCGWindowListExcludeDesktopElements,
@@ -38,6 +55,15 @@ def find_ttr_window() -> WindowInfo | None:
         name = win.get(Quartz.kCGWindowName, "")
         if owner == GAME_WINDOW_TITLE or name == GAME_WINDOW_TITLE:
             bounds = win.get(Quartz.kCGWindowBounds, {})
+            if _calibrated_bounds:
+                return WindowInfo(
+                    window_id=int(win[Quartz.kCGWindowNumber]),
+                    pid=int(win[Quartz.kCGWindowOwnerPID]),
+                    x=_calibrated_bounds["x"],
+                    y=_calibrated_bounds["y"],
+                    width=_calibrated_bounds["width"],
+                    height=_calibrated_bounds["height"],
+                )
             return WindowInfo(
                 window_id=int(win[Quartz.kCGWindowNumber]),
                 pid=int(win[Quartz.kCGWindowOwnerPID]),

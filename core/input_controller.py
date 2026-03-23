@@ -74,7 +74,7 @@ def fishing_cast(
     end_sx = start_sx + rand_x
     end_sy = start_sy + settings.CAST_DRAG_DISTANCE
 
-    log.debug("fishing_cast: (%d,%d) → (%d,%d)", start_sx, start_sy, end_sx, end_sy)
+    log.info("fishing_cast: (%d,%d)→(%d,%d) drag=(%+d,%+d)", start_sx, start_sy, end_sx, end_sy, rand_x, settings.CAST_DRAG_DISTANCE)
 
     pyautogui.moveTo(start_sx, start_sy)
     pyautogui.mouseDown()
@@ -84,9 +84,33 @@ def fishing_cast(
     pyautogui.mouseUp()
 
 
-_MIN_DRAG_DOWN = 80
-_MAX_DRAG_DOWN = 160
-_MAX_DRAG_HORIZ = 150
+def fishing_cast_raw(
+    button_x: int,
+    button_y: int,
+    drag_dx: int,
+    drag_dy: int,
+    *,
+    window: WindowInfo | None = None,
+) -> None:
+    """Cast with an explicit drag vector (screen px) from the button position.
+
+    Used by auto-calibration to cast with known drag values.
+    """
+    win = window or find_ttr_window()
+    if win is None:
+        log.warning("fishing_cast_raw: TTR window not found")
+        return
+    btn_sx, btn_sy = _to_screen(win, button_x, button_y)
+    end_sx = btn_sx + drag_dx
+    end_sy = btn_sy + drag_dy
+    log.info("fishing_cast_raw: (%d,%d)→(%d,%d) drag=(%+d,%+d)",
+             btn_sx, btn_sy, end_sx, end_sy, drag_dx, drag_dy)
+    pyautogui.moveTo(btn_sx, btn_sy)
+    pyautogui.mouseDown()
+    time.sleep(settings.CAST_DRAG_HOLD_MS / 1000.0)
+    pyautogui.moveTo(end_sx, end_sy, duration=0.15)
+    time.sleep(settings.CAST_DRAG_HOLD_MS / 1000.0)
+    pyautogui.mouseUp()
 
 
 def fishing_cast_at(
@@ -94,43 +118,39 @@ def fishing_cast_at(
     button_y: int,
     target_x: int,
     target_y: int,
-    pond_x: int,
-    pond_y: int,
-    pond_w: int,
-    pond_h: int,
     *,
     window: WindowInfo | None = None,
 ) -> None:
-    """Cast toward a specific fish shadow using pond-relative positioning.
+    """Cast toward a specific fish shadow using the calibrated drag transform.
 
-    *frac_forward*: 0 = shadow at pond bottom (near toon), 1 = far edge.
-    *frac_horiz*:  -1 = far left, 0 = center, +1 = far right.
-    These fractions are mapped to drag distance and direction
-    regardless of window size.
+    All coordinates are in retina frame pixels (window-relative).
+    The calibration maps the offset (target - button) to a screen-pixel
+    drag vector.  Call ``core.cast_calibration.cast_calibration.load()``
+    or run interactive calibration before using this.
     """
+    from core.cast_calibration import cast_calibration
+
     win = window or find_ttr_window()
     if win is None:
         log.warning("fishing_cast_at: TTR window not found")
         return
 
+    if not cast_calibration.is_calibrated:
+        log.warning("fishing_cast_at: no cast calibration — run Calibrate Cast first")
+        return
+
     btn_sx, btn_sy = _to_screen(win, button_x, button_y)
+    target_dx = float(target_x - button_x)
+    target_dy = float(target_y - button_y)
 
-    frac_forward = 1.0 - (target_y - pond_y) / max(1, pond_h)
-    frac_forward = max(0.0, min(1.0, frac_forward))
+    drag_dx, drag_dy = cast_calibration.compute_drag(target_dx, target_dy)
 
-    pond_cx = pond_x + pond_w // 2
-    frac_horiz = (target_x - pond_cx) / max(1, pond_w // 2)
-    frac_horiz = max(-1.0, min(1.0, frac_horiz))
+    end_sx = btn_sx + drag_dx
+    end_sy = btn_sy + drag_dy
 
-    drag_down = int(_MIN_DRAG_DOWN + frac_forward * (_MAX_DRAG_DOWN - _MIN_DRAG_DOWN))
-    drag_right = int(-frac_horiz * _MAX_DRAG_HORIZ)
-
-    end_sx = btn_sx + drag_right
-    end_sy = btn_sy + drag_down
-
-    log.debug(
-        "fishing_cast_at: fwd=%.2f horiz=%.2f → drag(%+d,%+d)",
-        frac_forward, frac_horiz, drag_right, drag_down,
+    log.info(
+        "fishing_cast_at: offset=(%+.0f,%+.0f) → drag=(%+d,%+d) screen(%d,%d)→(%d,%d)",
+        target_dx, target_dy, drag_dx, drag_dy, btn_sx, btn_sy, end_sx, end_sy,
     )
 
     pyautogui.moveTo(btn_sx, btn_sy)

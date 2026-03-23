@@ -61,11 +61,14 @@ _global_scale: float | None = None
 _scaled_template_cache: dict[str, np.ndarray] = {}
 
 
+_MIN_CALIBRATION_CONF = 0.60
+
+
 def calibrate_scale(frame_bgr: np.ndarray) -> float:
     """Determine the window scale by matching a known template across scales.
 
-    Call once at startup with a frame that contains the Cast button.
-    All subsequent find_template calls use this single scale.
+    Call once with a frame that contains the Cast button (sit on dock first).
+    Returns the best scale, or -1.0 if calibration failed.
     """
     global _global_scale
     _scaled_template_cache.clear()
@@ -95,8 +98,17 @@ def calibrate_scale(frame_bgr: np.ndarray) -> float:
             best_val = max_val
             best_scale = scale
 
+    if best_val < _MIN_CALIBRATION_CONF:
+        log.warning(
+            "calibrate_scale FAILED: best conf=%.3f (need %.2f). "
+            "Sit on the dock so the Cast button is visible, then recalibrate.",
+            best_val, _MIN_CALIBRATION_CONF,
+        )
+        _global_scale = None
+        return -1.0
+
     _global_scale = best_scale
-    log.info("calibrate_scale: best scale=%.1f (conf=%.3f)", best_scale, best_val)
+    log.info("calibrate_scale: scale=%.1f (conf=%.3f) — locked", best_scale, best_val)
     return best_scale
 
 
@@ -124,16 +136,14 @@ def find_template(
     template_name: str,
     threshold: float = settings.TEMPLATE_MATCH_THRESHOLD,
 ) -> MatchResult | None:
-    """Find a template in the frame.
+    """Find a template in the frame using the locked scale.
 
-    Auto-calibrates on first call if calibrate_scale() hasn't been run.
-    Uses pre-scaled template first; falls back to a multi-scale sweep
-    if the single-scale match is below threshold.
+    Requires calibrate_scale() to have been called first (via the
+    Calibrate Window button). Single matchTemplate call, no fallback.
     """
-    global _global_scale
-
     if _global_scale is None:
-        calibrate_scale(frame_bgr)
+        log.warning("find_template called before calibration")
+        return None
 
     tmpl = _get_scaled_template(template_name)
     if tmpl is None:
@@ -147,45 +157,12 @@ def find_template(
     result = cv2.matchTemplate(frame_bgr, tmpl, cv2.TM_CCOEFF_NORMED)
     _, max_val, _, max_loc = cv2.minMaxLoc(result)
 
-    if max_val >= threshold:
-        cx = max_loc[0] + tw // 2
-        cy = max_loc[1] + th // 2
-        return MatchResult(cx, cy, float(max_val), tw, th)
-
-    base_tmpl = _load_template(template_name)
-    if base_tmpl is None:
+    if max_val < threshold:
         return None
 
-    best_val = max_val
-    best_loc = max_loc
-    best_tw, best_th = tw, th
-    base_scale = _global_scale if _global_scale else 1.0
-    for delta in (-0.2, -0.1, 0.1, 0.2):
-        s = base_scale + delta
-        if s < 0.3 or s > 2.0:
-            continue
-        new_w = int(base_tmpl.shape[1] * s)
-        new_h = int(base_tmpl.shape[0] * s)
-        if new_w < 10 or new_h < 10 or new_w > fw or new_h > fh:
-            continue
-        scaled = cv2.resize(base_tmpl, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
-        res = cv2.matchTemplate(frame_bgr, scaled, cv2.TM_CCOEFF_NORMED)
-        _, mv, _, ml = cv2.minMaxLoc(res)
-        if mv > best_val:
-            best_val = mv
-            best_loc = ml
-            best_tw, best_th = new_w, new_h
-            if mv >= threshold:
-                _global_scale = s
-                _scaled_template_cache.clear()
-                break
-
-    if best_val < threshold:
-        return None
-
-    cx = best_loc[0] + best_tw // 2
-    cy = best_loc[1] + best_th // 2
-    return MatchResult(cx, cy, float(best_val), best_tw, best_th)
+    cx = max_loc[0] + tw // 2
+    cy = max_loc[1] + th // 2
+    return MatchResult(cx, cy, float(max_val), tw, th)
 
 
 def find_all_templates(

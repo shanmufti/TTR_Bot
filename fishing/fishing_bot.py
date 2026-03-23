@@ -10,15 +10,16 @@ import threading
 from dataclasses import dataclass
 from typing import Callable
 
+import cv2
 import numpy as np
 
 from config import settings
 from core import input_controller as inp
 from core.screen_capture import capture_window
 from core.window_manager import find_ttr_window, is_window_available, WindowInfo
-from vision.pond_detector import detect_pond, PondArea
+from vision.pond_detector import detect_pond
 from vision.fish_detector import find_best_fish
-from vision.template_matcher import find_template, is_element_visible, calibrate_scale, clear_cache
+from vision.template_matcher import find_template
 from utils.logger import log
 
 
@@ -110,6 +111,13 @@ class FishingBot:
     def _run_loop(self) -> None:
         """Main fishing session loop (runs in a background thread)."""
         try:
+            from core.cast_calibration import cast_calibration
+            if not cast_calibration.is_calibrated:
+                cast_calibration.load()
+            if not cast_calibration.is_calibrated:
+                self._finish("No cast calibration — run Calibrate Cast first")
+                return
+
             if not is_window_available():
                 self._finish("TTR window not found")
                 return
@@ -121,13 +129,6 @@ class FishingBot:
             if win is None:
                 self._finish("TTR window not found")
                 return
-
-            clear_cache()
-            frame = capture_window(win)
-            if frame is not None:
-                calibrate_scale(frame)
-            else:
-                log.warning("Could not capture frame for scale calibration")
 
             cfg = self.config
             sells_remaining = cfg.sell_rounds
@@ -184,59 +185,47 @@ class FishingBot:
             self._stop_reason = "TTR window lost"
             return False
 
-        frame = capture_window(win)
-        if frame is None:
-            self._stop_reason = "Screen capture failed"
-            return False
-        pond = detect_pond(frame)
-
         while casts_left > 0 and not self._stop_event.is_set():
+            cycle_start = time.monotonic()
+
             while self._paused and not self._stop_event.is_set():
                 time.sleep(0.25)
             if self._stop_event.is_set():
                 break
 
+            t = time.monotonic()
             inp.ensure_focused()
+            log.info("[T+%.2fs] ensure_focused %.3fs", t - cycle_start, time.monotonic() - t)
 
             self.stats.cast_count += 1
             self.stats.session_casts += 1
             self._notify_stats()
 
-            t0 = time.monotonic()
-            cast_ok, frame = self._do_cast(win, pond, cfg)
-            log.info("_do_cast took %.1fs", time.monotonic() - t0)
+            t = time.monotonic()
+            cast_ok, frame = self._do_cast(win, cfg)
+            log.info("[T+%.2fs] _do_cast %.3fs (ok=%s)", time.monotonic() - cycle_start, time.monotonic() - t, cast_ok)
             if not cast_ok:
                 no_button_streak += 1
                 if no_button_streak >= 10:
                     self._stop_reason = "Red fishing button not found (10 retries)"
                     break
-                log.info("Cast button not found (retry %d) – waiting 2s…", no_button_streak)
+                log.info("No cast (retry %d) – waiting 2s…", no_button_streak)
                 self.stats.cast_count -= 1
                 self.stats.session_casts -= 1
                 time.sleep(2.0)
                 continue
             no_button_streak = 0
 
-            log.info("Jellybean check (0.4s wait)…")
-            time.sleep(0.4)
-            frame = capture_window(win)
-            if frame is not None:
-                no_jb = self._check_no_jellybeans(win, frame)
-                if no_jb:
-                    log.info(self._MSG_NO_JELLYBEANS)
-                    self._notify_status(self._MSG_NO_JELLYBEANS)
-                    self._exit_fishing()
-                    return True
-
-            log.info("Post-cast delay (%.1fs)…", settings.POST_CAST_DELAY_S)
+            t = time.monotonic()
             time.sleep(settings.POST_CAST_DELAY_S)
+            log.info("[T+%.2fs] post-cast sleep %.3fs", time.monotonic() - cycle_start, time.monotonic() - t)
 
             cast_label = f"cast {cfg.casts_per_round - casts_left + 1}/{cfg.casts_per_round}"
             self._notify_status(f"Waiting for bite… ({cast_label})")
 
-            t1 = time.monotonic()
+            t = time.monotonic()
             caught = self._wait_for_bite(win, cfg.bite_timeout)
-            log.info("Bite wait took %.1fs (caught=%s)", time.monotonic() - t1, caught)
+            log.info("[T+%.2fs] bite_wait %.3fs (caught=%s)", time.monotonic() - cycle_start, time.monotonic() - t, caught)
 
             if self._jellybean_error:
                 log.info(self._MSG_NO_JELLYBEANS)
@@ -249,25 +238,16 @@ class FishingBot:
                 self.stats.fish_caught += 1
                 self.stats.session_fish += 1
                 self._notify_stats()
-                self._notify_status("Fish caught!")
-                t2 = time.monotonic()
-                self._close_catch_popup(win)
-                log.info("Close popup took %.1fs", time.monotonic() - t2)
-
-                time.sleep(0.3)
-                frame = capture_window(win)
-                if frame is not None and is_element_visible(frame, "bucket_full_popup"):
-                    log.info("Bucket full!")
-                    self._notify_status("Bucket full – selling fish")
-                    self._close_bucket_full_popup(win)
-                    return True
-
+                self._notify_status("Fish caught – recasting")
                 casts_left -= 1
             else:
                 self._notify_status("No bite – recasting")
 
-            log.info("Between-cast delay (%.1fs)…", settings.BETWEEN_CAST_DELAY_S)
+            t = time.monotonic()
             time.sleep(settings.BETWEEN_CAST_DELAY_S)
+            log.info("[T+%.2fs] between-cast sleep %.3fs", time.monotonic() - cycle_start, time.monotonic() - t)
+
+            log.info("=== CYCLE TOTAL: %.2fs ===", time.monotonic() - cycle_start)
 
         return False
 
@@ -276,70 +256,125 @@ class FishingBot:
     # ------------------------------------------------------------------
 
     def _do_cast(
-        self, win: WindowInfo, pond: PondArea, cfg: FishingConfig,
+        self, win: WindowInfo, cfg: FishingConfig,
     ) -> tuple[bool, "np.ndarray | None"]:
-        """Find the red button, aim at a fish shadow, and cast.
+        """Find the red button, detect pond & shadows, and cast.
 
         Returns (success, frame) so the caller can reuse the last frame.
         """
+        t0 = time.monotonic()
         btn = None
         frame = None
-        for _ in range(20):
+        attempts = 0
+        for attempts in range(30):  # noqa: B007
             frame = capture_window(win)
             if frame is not None:
                 btn = find_template(frame, "red_fishing_button")
                 if btn is not None:
                     break
-            time.sleep(0.2)
+            time.sleep(0.1)
+        log.info("  find_button: %.3fs (%d attempts, found=%s)", time.monotonic() - t0, attempts + 1, btn is not None)
 
         if btn is None or frame is None:
             log.warning("Red fishing button not found – is toon at dock?")
             return False, frame
 
-        if not pond.empty:
-            fish_pos = find_best_fish(frame, pond)
-            if fish_pos is not None:
-                fx, fy = fish_pos
-                self._notify_status(f"Casting at shadow ({fx},{fy})")
-                inp.fishing_cast_at(
-                    btn.x, btn.y, fx, fy,
-                    pond.x, pond.y, pond.width, pond.height,
-                    window=win,
-                )
-                return True, frame
+        tp = time.monotonic()
+        pond = detect_pond(frame)
+        log.info("  detect_pond: %.3fs (empty=%s, %dx%d at %d,%d)",
+                 time.monotonic() - tp, pond.empty, pond.width, pond.height, pond.x, pond.y)
 
-        self._notify_status("No shadow – random cast")
-        inp.fishing_cast(btn.x, btn.y, variance=cfg.variance, window=win)
+        if pond.empty:
+            log.info("No pond detected – skipping cast")
+            self._notify_status("No pond detected – skipping cast")
+            return False, frame
+
+        # Take a fresh frame right before shadow scan so positions are
+        # as current as possible (shadows move).
+        t1 = time.monotonic()
+        fresh = capture_window(win)
+        if fresh is not None:
+            frame = fresh
+        fish_pos = find_best_fish(frame, pond)
+        log.info("  find_shadows: %.3fs (found=%s)", time.monotonic() - t1, fish_pos is not None)
+
+        if fish_pos is None:
+            log.info("No shadows found – skipping cast")
+            self._notify_status("No shadows – skipping cast")
+            return False, frame
+
+        fx, fy = fish_pos
+        log.info("  Casting at shadow (%d,%d)  btn=(%d,%d)", fx, fy, btn.x, btn.y)
+        self._notify_status(f"Casting at shadow ({fx},{fy})")
+        t2 = time.monotonic()
+        inp.fishing_cast_at(btn.x, btn.y, fx, fy, window=win)
+        log.info("  cast_execution: %.3fs", time.monotonic() - t2)
         return True, frame
 
     # ------------------------------------------------------------------
     # Bite detection
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _has_catch_popup(frame: "np.ndarray") -> bool:
+        """Detect the fish-caught popup by its warm-yellow card background.
+
+        Checks the center-top region for a large cluster of the popup's
+        distinctive cream/yellow pixels (HSV H=25-35, S=40-90, V>220).
+        Returns True when more than 5% of that region matches.
+        """
+        h, w = frame.shape[:2]
+        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+        roi = hsv[h // 6 : h // 2, w // 4 : 3 * w // 4]
+        card = (
+            (roi[:, :, 0] >= 25)
+            & (roi[:, :, 0] <= 35)
+            & (roi[:, :, 1] >= 40)
+            & (roi[:, :, 1] <= 90)
+            & (roi[:, :, 2] >= 220)
+        )
+        return np.sum(card) / card.size > 0.05
+
     def _wait_for_bite(self, win: WindowInfo, timeout: float) -> bool:
         """Poll until the fish-caught popup appears.
 
-        Uses wall-clock time for the timeout (accounts for slow template
-        matching on Retina frames).
         Returns True if a catch was detected, False on timeout or
         jellybean error (which sets _jellybean_error flag).
         """
         self._jellybean_error = False
         deadline = time.monotonic() + timeout
+        polls = 0
         while time.monotonic() < deadline:
             if self._stop_event.is_set():
                 return False
 
+            tp = time.monotonic()
             frame = capture_window(win)
             if frame is None:
                 time.sleep(0.05)
                 continue
 
-            if find_template(frame, "jellybean_exit") is not None:
+            t_cap = time.monotonic() - tp
+
+            t_jb = time.monotonic()
+            jb = find_template(frame, "jellybean_exit")
+            t_jb = time.monotonic() - t_jb
+            if jb is not None:
                 self._jellybean_error = True
                 return False
 
-            if is_element_visible(frame, "fish_popup_close"):
+            t_pop = time.monotonic()
+            caught = self._has_catch_popup(frame)
+            t_pop = time.monotonic() - t_pop
+
+            polls += 1
+            if polls <= 3 or polls % 10 == 0:
+                log.info(
+                    "  bite_poll #%d: capture=%.3fs jb_check=%.3fs popup_check=%.3fs",
+                    polls, t_cap, t_jb, t_pop,
+                )
+
+            if caught:
                 return True
 
             time.sleep(settings.BITE_POLL_INTERVAL_S)
@@ -408,9 +443,8 @@ class FishingBot:
             if match is None:
                 return
             inp.ensure_focused()
-            time.sleep(0.1)
             inp.click(match.x, match.y, window=win)
-            time.sleep(0.5)
+            time.sleep(0.3)
         log.warning("Could not close fish popup after retries")
 
     def _close_bucket_full_popup(self, win: WindowInfo) -> None:
