@@ -64,52 +64,65 @@ _scaled_template_cache: dict[str, np.ndarray] = {}
 _MIN_CALIBRATION_CONF = 0.60
 
 
+_CALIBRATION_ANCHORS = [
+    "red_fishing_button",
+    "exit_fishing_button",
+    "plant_flower_button",
+]
+
+
 def calibrate_scale(frame_bgr: np.ndarray) -> float:
     """Determine the window scale by matching a known template across scales.
 
-    Call once with a frame that contains the Cast button (sit on dock first).
+    Tries multiple anchor templates (fishing button, exit button, plant button)
+    so calibration works whether the toon is at the dock or at the garden.
     Returns the best scale, or -1.0 if calibration failed.
     """
     global _global_scale
     _scaled_template_cache.clear()
 
-    tmpl = _load_template("red_fishing_button")
-    if tmpl is None:
-        tmpl = _load_template("exit_fishing_button")
-    if tmpl is None:
-        log.warning("calibrate_scale: no calibration template available")
-        _global_scale = 1.0
-        return 1.0
-
     fh, fw = frame_bgr.shape[:2]
-    th, tw = tmpl.shape[:2]
-    best_val = -1.0
-    best_scale = 1.0
+    overall_best_val = -1.0
+    overall_best_scale = 1.0
 
-    for scale in _SCALE_RANGE:
-        new_w = int(tw * scale)
-        new_h = int(th * scale)
-        if new_w < 10 or new_h < 10 or new_w > fw or new_h > fh:
+    for anchor in _CALIBRATION_ANCHORS:
+        tmpl = _load_template(anchor)
+        if tmpl is None:
             continue
-        scaled = cv2.resize(tmpl, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
-        result = cv2.matchTemplate(frame_bgr, scaled, cv2.TM_CCOEFF_NORMED)
-        _, max_val, _, _ = cv2.minMaxLoc(result)
-        if max_val > best_val:
-            best_val = max_val
-            best_scale = scale
 
-    if best_val < _MIN_CALIBRATION_CONF:
+        th, tw = tmpl.shape[:2]
+        for scale in _SCALE_RANGE:
+            new_w = int(tw * scale)
+            new_h = int(th * scale)
+            if new_w < 10 or new_h < 10 or new_w > fw or new_h > fh:
+                continue
+            scaled = cv2.resize(tmpl, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+            result = cv2.matchTemplate(frame_bgr, scaled, cv2.TM_CCOEFF_NORMED)
+            _, max_val, _, _ = cv2.minMaxLoc(result)
+            if max_val > overall_best_val:
+                overall_best_val = max_val
+                overall_best_scale = scale
+
+        if overall_best_val >= _MIN_CALIBRATION_CONF:
+            log.info(
+                "calibrate_scale: anchor=%s scale=%.1f (conf=%.3f)",
+                anchor, overall_best_scale, overall_best_val,
+            )
+            break
+
+    if overall_best_val < _MIN_CALIBRATION_CONF:
         log.warning(
             "calibrate_scale FAILED: best conf=%.3f (need %.2f). "
-            "Sit on the dock so the Cast button is visible, then recalibrate.",
-            best_val, _MIN_CALIBRATION_CONF,
+            "Make sure a known UI button is visible, then recalibrate.",
+            overall_best_val, _MIN_CALIBRATION_CONF,
         )
         _global_scale = None
         return -1.0
 
-    _global_scale = best_scale
-    log.info("calibrate_scale: scale=%.1f (conf=%.3f) — locked", best_scale, best_val)
-    return best_scale
+    _global_scale = overall_best_scale
+    log.info("calibrate_scale: scale=%.1f (conf=%.3f) — locked",
+             overall_best_scale, overall_best_val)
+    return overall_best_scale
 
 
 def _get_scaled_template(name: str) -> np.ndarray | None:

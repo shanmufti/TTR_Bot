@@ -1,4 +1,4 @@
-"""All configurable thresholds, delays, and defaults for the TTR fishing bot."""
+"""All configurable thresholds, delays, and defaults for the TTR bot."""
 
 import os
 
@@ -8,6 +8,7 @@ import os
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TEMPLATES_DIR = os.path.join(PROJECT_ROOT, "templates")
 LOGS_DIR = os.path.join(PROJECT_ROOT, "logs")
+GARDENING_ROUTINES_DIR = os.path.join(PROJECT_ROOT, "gardening_routines")
 
 # ---------------------------------------------------------------------------
 # Game window
@@ -84,6 +85,7 @@ BUBBLE_SCAN_STEP = 3  # pixel step when scanning for bubbles
 # ---------------------------------------------------------------------------
 TEMPLATE_MATCH_THRESHOLD = 0.65  # minimum confidence for a template match
 TEMPLATE_NAMES = {
+    # Fishing
     "red_fishing_button": "Red_Fishing_Button.png",
     "sell_all_button": "Blue_Sell_All_Button.png",
     "exit_fishing_button": "Exit_Fishing_Button.png",
@@ -91,6 +93,19 @@ TEMPLATE_NAMES = {
     "bucket_full_popup": "FishBucketFullPopup.png",
     "ok_button": "Blue_Ok_Button.png",
     "jellybean_exit": "JellybeanExitButton.png",
+    # Gardening
+    "plant_flower_button": "Plant_Flower_Button.png",
+    "red_jellybean_button": "Red_Jellybean_Button.png",
+    "green_jellybean_button": "Green_Jellybean_Button.png",
+    "orange_jellybean_button": "Orange_Jellybean_Button.png",
+    "purple_jellybean_button": "Purple_Jellybean_Button.png",
+    "blue_jellybean_button": "Blue_Jellybean_Button.png",
+    "pink_jellybean_button": "Pink_Jellybean_Button.png",
+    "yellow_jellybean_button": "Yellow_Jellybean_Button.png",
+    "cyan_jellybean_button": "Cyan_Jellybean_Button.png",
+    "silver_jellybean_button": "Silver_Jellybean_Button.png",
+    "blue_plant_button": "Blue_Plant_Button.png",
+    "watering_can_button": "Watering_Can_Button.png",
 }
 
 # ---------------------------------------------------------------------------
@@ -115,3 +130,13 @@ FISHING_LOCATIONS = [
     "Brrrgh Sleet Street",
     "DDL Lullaby Lane",
 ]
+
+# ---------------------------------------------------------------------------
+# Gardening
+# ---------------------------------------------------------------------------
+GARDEN_POST_BEAN_DELAY_S = 2.0  # wait after clicking each jellybean
+GARDEN_POST_PLANT_DELAY_S = 8.0  # wait after clicking the Plant button
+GARDEN_POST_CONFIRM_DELAY_S = 2.0  # wait after clicking OK confirmation
+GARDEN_POST_WATER_DELAY_S = 4.0  # wait between watering can clicks
+GARDEN_WATERS_AFTER_PLANT = 3  # times to water a newly planted flower
+GARDEN_FIND_TIMEOUT_S = 5.0  # max seconds to poll for a template

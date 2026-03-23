@@ -1,4 +1,4 @@
-"""Tkinter GUI for the TTR Fishing Bot."""
+"""Tkinter GUI for the TTR Bot (Fishing + Gardening)."""
 
 from __future__ import annotations
 
@@ -42,17 +42,23 @@ class _TkLogHandler(logging.Handler):
 
 
 class App:
-    """Main application window."""
+    """Main application window with tabbed Fishing / Gardening UI."""
 
     _SELL_AUTO = "(auto)"
 
+    # Shared theme constants
+    BG = "#0f3460"
+    FG = "#eaeaea"
+    ACCENT = "#e94560"
+    ENTRY_BG = "#16213e"
+
     def __init__(self) -> None:
         self._root = tk.Tk()
-        self._root.title("TTR Fishing Bot")
+        self._root.title("TTR Bot")
         screen_w = self._root.winfo_screenwidth()
-        self._root.geometry(f"520x690+{screen_w - 540}+30")
+        self._root.geometry(f"520x750+{screen_w - 540}+30")
         self._root.resizable(False, False)
-        self._root.configure(bg="#0f3460")
+        self._root.configure(bg=self.BG)
 
         self._bot = FishingBot()
         self._overlay: OverlayWindow | None = None
@@ -69,19 +75,14 @@ class App:
 
     def _build_ui(self) -> None:
         root = self._root
-        pad = {"padx": 12, "pady": 4}
-        bg = "#0f3460"
-        fg = "#eaeaea"
-        accent = "#e94560"
-        entry_bg = "#16213e"
+        bg, fg, accent, entry_bg = self.BG, self.FG, self.ACCENT, self.ENTRY_BG
 
-        # Title
+        # ---- Shared header ----
         tk.Label(
-            root, text="TTR Fishing Bot", font=("Helvetica", 18, "bold"),
+            root, text="TTR Bot", font=("Helvetica", 18, "bold"),
             fg=accent, bg=bg,
         ).pack(pady=(14, 2))
 
-        # Status bar
         self._status_var = tk.StringVar(value="Checking for TTR window…")
         self._status_label = tk.Label(
             root, textvariable=self._status_var, font=("Helvetica", 10),
@@ -89,9 +90,59 @@ class App:
         )
         self._status_label.pack()
 
+        # ---- Shared calibrate button ----
+        cal_frame = tk.Frame(root, bg=bg)
+        cal_frame.pack(fill="x", padx=12, pady=(6, 2))
+
+        self._calibrate_btn = tk.Button(
+            cal_frame, text="Calibrate Window", font=("Helvetica", 11),
+            highlightbackground="#2980b9", width=16, command=self._on_calibrate,
+        )
+        self._calibrate_btn.pack(side="left")
+
+        # ---- Notebook (tabs) ----
+        style = ttk.Style()
+        style.configure("Bot.TNotebook", background=bg)
+        style.configure("Bot.TNotebook.Tab", font=("Helvetica", 11, "bold"))
+
+        self._notebook = ttk.Notebook(root, style="Bot.TNotebook")
+        self._notebook.pack(fill="both", expand=True, padx=12, pady=(6, 0))
+
+        fish_tab = tk.Frame(self._notebook, bg=bg)
+        self._notebook.add(fish_tab, text="  Fishing  ")
+        self._build_fishing_tab(fish_tab)
+
+        from ui.gardening_tab import GardeningTab
+        garden_frame = tk.Frame(self._notebook, bg=bg)
+        self._notebook.add(garden_frame, text="  Gardening  ")
+        self._garden_tab = GardeningTab(
+            garden_frame, self._root, self._status_var, self._on_calibrate,
+        )
+
+        # ---- Shared log output ----
+        log_label = tk.Label(
+            root, text="Log", font=("Helvetica", 10, "bold"),
+            fg=fg, bg=bg, anchor="w",
+        )
+        log_label.pack(fill="x", padx=12)
+
+        self._log_text = scrolledtext.ScrolledText(
+            root, height=8, font=("Menlo", 9), bg=entry_bg, fg=fg,
+            insertbackground=fg, state="disabled", wrap="word",
+        )
+        self._log_text.pack(fill="both", expand=True, padx=12, pady=(0, 12))
+
+    # ------------------------------------------------------------------
+    # Fishing tab
+    # ------------------------------------------------------------------
+
+    def _build_fishing_tab(self, parent: tk.Frame) -> None:
+        bg, fg, accent, entry_bg = self.BG, self.FG, self.ACCENT, self.ENTRY_BG
+        pad = {"padx": 8, "pady": 4}
+
         # ---- Settings frame ----
         settings_frame = tk.LabelFrame(
-            root, text="Settings", font=("Helvetica", 11, "bold"),
+            parent, text="Settings", font=("Helvetica", 11, "bold"),
             fg=fg, bg=bg, bd=1, relief="groove",
         )
         settings_frame.pack(fill="x", **pad)
@@ -201,7 +252,6 @@ class App:
         checks_frame = tk.Frame(settings_frame, bg=bg)
         checks_frame.grid(row=row, column=0, columnspan=2, sticky="w", padx=8, pady=3)
 
-
         self._quickcast_var = tk.BooleanVar(value=False)
         tk.Checkbutton(
             checks_frame, text="Quick cast", variable=self._quickcast_var,
@@ -215,16 +265,9 @@ class App:
             command=self._toggle_overlay,
         ).pack(side="left")
 
-        # ---- Buttons ----
-        style = ttk.Style()
-        style.configure("Green.TButton", font=("Helvetica", 12, "bold"))
-        style.configure("Red.TButton", font=("Helvetica", 12, "bold"))
-        style.configure("Purple.TButton", font=("Helvetica", 11))
-        style.configure("Blue.TButton", font=("Helvetica", 11))
-        style.configure("Gold.TButton", font=("Helvetica", 11))
-
-        btn_frame = tk.Frame(root, bg=bg)
-        btn_frame.pack(fill="x", padx=12, pady=8)
+        # ---- Action buttons ----
+        btn_frame = tk.Frame(parent, bg=bg)
+        btn_frame.pack(fill="x", padx=8, pady=8)
 
         self._start_btn = tk.Button(
             btn_frame, text="▶ Start Fishing", font=("Helvetica", 12, "bold"),
@@ -245,48 +288,30 @@ class App:
         )
         self._pause_btn.pack(side="left")
 
-        # ---- Calibrate / Test buttons ----
-        test_frame = tk.Frame(root, bg=bg)
-        test_frame.pack(fill="x", padx=12, pady=(0, 8))
-
-        self._calibrate_btn = tk.Button(
-            test_frame, text="Calibrate Window", font=("Helvetica", 11),
-            highlightbackground="#2980b9", width=16, command=self._on_calibrate,
-        )
-        self._calibrate_btn.pack(side="left", padx=(0, 8))
+        # ---- Test / Cast calibration ----
+        test_frame = tk.Frame(parent, bg=bg)
+        test_frame.pack(fill="x", padx=8, pady=(0, 4))
 
         self._test_sell_btn = tk.Button(
             test_frame, text="Test Sell Trip", font=("Helvetica", 11),
             highlightbackground="#b8860b", width=14, command=self._on_test_sell,
         )
-        self._test_sell_btn.pack(side="left")
-
-        # ---- Cast calibration button ----
-        cast_cal_frame = tk.Frame(root, bg=bg)
-        cast_cal_frame.pack(fill="x", padx=12, pady=(0, 8))
+        self._test_sell_btn.pack(side="left", padx=(0, 8))
 
         self._cast_cal_btn = tk.Button(
-            cast_cal_frame, text="Calibrate Cast", font=("Helvetica", 11),
-            highlightbackground="#e67e22", width=16, command=self._on_calibrate_cast,
+            test_frame, text="Calibrate Cast", font=("Helvetica", 11),
+            highlightbackground="#e67e22", width=14, command=self._on_calibrate_cast,
         )
         self._cast_cal_btn.pack(side="left", padx=(0, 8))
 
         self._cast_cal_status = tk.Label(
-            cast_cal_frame, text="", font=("Helvetica", 10), fg="#e67e22", bg=bg,
+            test_frame, text="", font=("Helvetica", 10), fg="#e67e22", bg=bg,
         )
         self._cast_cal_status.pack(side="left")
 
-        # ---- Log output ----
-        log_label = tk.Label(
-            root, text="Log", font=("Helvetica", 10, "bold"), fg=fg, bg=bg, anchor="w",
-        )
-        log_label.pack(fill="x", padx=12)
-
-        self._log_text = scrolledtext.ScrolledText(
-            root, height=12, font=("Menlo", 9), bg=entry_bg, fg=fg,
-            insertbackground=fg, state="disabled", wrap="word",
-        )
-        self._log_text.pack(fill="both", expand=True, padx=12, pady=(0, 12))
+    # ------------------------------------------------------------------
+    # Logger / callbacks
+    # ------------------------------------------------------------------
 
     def _attach_logger(self) -> None:
         handler = _TkLogHandler(self._log_text)
@@ -300,14 +325,13 @@ class App:
         self._bot.on_fishing_ended = self._on_fishing_ended_thread
 
     # ------------------------------------------------------------------
-    # Button handlers
+    # Fishing button handlers
     # ------------------------------------------------------------------
 
     def _on_start(self) -> None:
         if self._bot.running:
             return
 
-        # --- Auto-calibrate window before fishing ---
         self._status_var.set("Calibrating…")
         self._root.update_idletasks()
         self._on_calibrate()
@@ -317,7 +341,6 @@ class App:
             self._status_var.set("Calibration failed — sit on dock first!")
             return
 
-        # --- Load cast calibration ---
         from core.cast_calibration import cast_calibration
         if not cast_calibration.is_calibrated:
             cast_calibration.load()
@@ -325,7 +348,6 @@ class App:
             self._status_var.set("Run Calibrate Cast first!")
             return
 
-        # Resolve sell path file — explicit selection or auto-match by location
         sell_path_file = None
         sell_choice = self._sell_path_var.get()
         if sell_choice and sell_choice != self._SELL_AUTO:
@@ -333,7 +355,6 @@ class App:
                 if entry["name"] == sell_choice:
                     sell_path_file = entry["path"]
                     break
-        # (auto): sell_controller will match by location name at runtime
 
         cfg = FishingConfig(
             location=self._location_var.get(),
@@ -391,7 +412,7 @@ class App:
 
         scale = calibrate_scale(frame)
         if scale < 0:
-            self._status_var.set("Calibration failed — sit on dock first!")
+            self._status_var.set("Calibration failed — no known button visible")
         else:
             self._status_var.set(f"Calibrated: {win.width}×{win.height} scale={scale:.1f}")
 
@@ -448,13 +469,11 @@ class App:
                 self._cast_cal_status.config(text=label)
                 log.info("Cast calibration: %s drag=(%+d,%+d)", label, drag_dx, drag_dy)
 
-                # Capture before frame
                 before = capture_window(win)
                 if before is None:
                     log.warning("Cast calibration: capture failed on cast %d", idx + 1)
                     continue
 
-                # Re-detect button (may shift after previous cast)
                 new_btn = find_template(before, "red_fishing_button")
                 if new_btn is not None:
                     btn = new_btn
@@ -462,14 +481,11 @@ class App:
                     log.warning("Cast button not found for calibration cast %d", idx + 1)
                     continue
 
-                # Perform the cast with known drag
                 ensure_focused()
                 fishing_cast_raw(btn.x, btn.y, drag_dx, drag_dy, window=win)
 
-                # Wait for bobber to settle
                 time.sleep(2.0)
 
-                # Capture after frame and detect bobber
                 after = capture_window(win)
                 if after is None:
                     log.warning("Cast calibration: post-cast capture failed")
@@ -480,7 +496,6 @@ class App:
                 )
                 if landing is None:
                     log.warning("Cast calibration: bobber not detected for cast %d", idx + 1)
-                    # Wait for timeout/bite before next cast
                     self._cast_cal_status.config(text=f"Bobber not found ({idx + 1}/{total})")
                     time.sleep(12.0)
                     continue
@@ -490,7 +505,6 @@ class App:
                 land_dy = float(by - btn.y)
                 new_cal.add_sample(CalibrationSample(drag_dx, drag_dy, land_dx, land_dy))
 
-                # Wait for the bite timeout / catch popup to clear before next cast
                 self._cast_cal_status.config(text=f"Waiting for reset ({idx + 1}/{total})…")
                 deadline = time.monotonic() + 15.0
                 while time.monotonic() < deadline:
@@ -554,19 +568,20 @@ class App:
 
         threading.Thread(target=_run, daemon=True).start()
 
+    # ------------------------------------------------------------------
+    # Fishing helpers
+    # ------------------------------------------------------------------
+
     def _get_sell_path_options(self) -> list[str]:
-        """Build the dropdown list of sell paths."""
         options = [self._SELL_AUTO]
         for entry in list_sell_paths():
             options.append(entry["name"])
         return options
 
     def _get_sell_path_names(self) -> set[str]:
-        """Return a set of recorded sell path names (lowercased)."""
         return {e["name"].lower() for e in list_sell_paths()}
 
     def _on_location_changed(self) -> None:
-        """When the fishing location changes, update the sell path status."""
         location = self._location_var.get()
         if location == "Fish Anywhere":
             self._sell_status_var.set("No sell needed for Fish Anywhere")
@@ -582,17 +597,12 @@ class App:
             self._sell_status_label.config(fg="#e94560")
 
     def _refresh_sell_paths(self) -> None:
-        """Refresh the sell path dropdown and re-check status."""
         options = self._get_sell_path_options()
         self._sell_path_combo["values"] = options
         log.info("Refreshed sell paths: %d custom paths found", len(options) - 1)
         self._on_location_changed()
 
     def _on_record_sell_path(self) -> None:
-        """Launch the sell-path recorder in a new terminal window.
-
-        Pre-fills the current fishing location as the suggested path name.
-        """
         script = os.path.join(settings.PROJECT_ROOT, "record_sell_path.py")
         venv_python = os.path.join(settings.PROJECT_ROOT, "venv", "bin", "python3")
         if not os.path.isfile(venv_python):
@@ -648,12 +658,16 @@ class App:
     # ------------------------------------------------------------------
 
     def _poll_window_status(self) -> None:
-        """Check every 2 seconds whether the TTR window is visible."""
         available = is_window_available()
         if not self._bot.running:
-            self._status_var.set(
-                "TTR window detected" if available else "TTR window not found"
+            garden_running = hasattr(self, "_garden_tab") and (
+                self._garden_tab._bot.running
+                or self._garden_tab._routine_runner.running
             )
+            if not garden_running:
+                self._status_var.set(
+                    "TTR window detected" if available else "TTR window not found"
+                )
             self._start_btn.config(state="normal" if available else "disabled")
         self._root.after(2000, self._poll_window_status)
 
@@ -662,13 +676,14 @@ class App:
     # ------------------------------------------------------------------
 
     def run(self) -> None:
-        """Start the tkinter main loop."""
         self._root.protocol("WM_DELETE_WINDOW", self._on_close)
         self._root.mainloop()
 
     def _on_close(self) -> None:
         if self._bot.running:
             self._bot.stop()
+        if hasattr(self, "_garden_tab"):
+            self._garden_tab.shutdown()
         if self._overlay:
             self._overlay.destroy()
         self._root.destroy()
