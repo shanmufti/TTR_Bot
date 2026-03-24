@@ -8,15 +8,15 @@ from __future__ import annotations
 
 import time
 import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Callable
 
 from config import settings
 from core import input_controller as inp
 from core.screen_capture import capture_window
 from core.window_manager import find_ttr_window, WindowInfo
-from gardening.flowers import BEAN_CHAR_TO_TEMPLATE, lookup_flower
-from vision.template_matcher import find_template, is_element_visible, MatchResult
+from gardening.flowers import BEAN_CHAR_TO_TEMPLATE
+from vision.template_matcher import find_template, is_element_visible
 from utils.logger import log
 
 

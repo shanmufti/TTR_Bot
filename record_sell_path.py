@@ -162,9 +162,9 @@ def main():
     for step, title, desc in phases:
         print(f"  Phase {step}: {title}")
         print(f"    {desc}")
-        print(f"    >>> Press F7 in TTR to START recording <<<")
+        print("    >>> Press F7 in TTR to START recording <<<")
         _wait_for_f7()
-        print(f"    Recording... (press F8 to stop)")
+        print("    Recording... (press F8 to stop)")
         events = _record_phase(title)
         results.append(events)
         print()

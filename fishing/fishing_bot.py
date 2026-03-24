@@ -143,7 +143,7 @@ class FishingBot:
                     time.sleep(settings.SELL_WALK_DELAY_S)
 
                 self._notify_status("Fishing…")
-                bucket_full = self._fishing_round(cfg, is_first_cycle)
+                self._fishing_round(cfg, is_first_cycle)
                 is_first_cycle = False
 
                 if self._stop_event.is_set():

@@ -13,6 +13,8 @@ from PIL import Image, ImageTk
 from config import settings
 from gardening.flowers import BEAN_COLORS, get_flowers_by_beans, lookup_flower
 from gardening.gardening_bot import GardenBot, GardeningStats
+from gardening.demo_recorder import DemoRecorder
+from gardening.demo_processor import DemoProcessor
 from gardening.routine_runner import RoutineRunner, RoutineProgress, list_routines
 from utils.logger import log
 
@@ -21,6 +23,8 @@ FG = "#eaeaea"
 ACCENT = "#e94560"
 ENTRY_BG = "#16213e"
 _STOP_LABEL = "■ Stop"
+_MSG_SELECT_FLOWER = "Select a flower first"
+_MSG_CALIBRATION_FAILED = "Calibration failed — stand at garden first"
 
 
 class GardeningTab:
@@ -40,6 +44,7 @@ class GardeningTab:
 
         self._bot = GardenBot()
         self._routine_runner = RoutineRunner(self._bot)
+        self._demo_recorder = DemoRecorder()
 
         self._build_ui()
         self._wire_callbacks()
@@ -156,6 +161,74 @@ class GardeningTab:
         )
         self._plant_stop_btn.pack(side="left")
 
+        # ---- Demo Recording section ----
+        demo_frame = tk.LabelFrame(
+            parent,
+            text="Smart Navigation — Demo Recording",
+            font=("Helvetica", 11, "bold"),
+            fg=FG,
+            bg=BG,
+            bd=1,
+            relief="groove",
+        )
+        demo_frame.pack(fill="x", **pad)
+
+        demo_info = tk.Label(
+            demo_frame,
+            text="Record yourself doing a garden cycle.\n"
+                 "The bot learns where beds are + how to navigate.",
+            font=("Helvetica", 9),
+            fg="#a0a0a0",
+            bg=BG,
+            justify="left",
+        )
+        demo_info.pack(padx=8, pady=(4, 2), anchor="w")
+
+        demo_btns = tk.Frame(demo_frame, bg=BG)
+        demo_btns.pack(fill="x", padx=8, pady=(2, 4))
+
+        self._record_btn = tk.Button(
+            demo_btns,
+            text="● Record Demo",
+            font=("Helvetica", 12, "bold"),
+            highlightbackground="#c0392b",
+            width=14,
+            command=self._on_record_demo,
+        )
+        self._record_btn.pack(side="left", padx=(0, 8))
+
+        self._stop_record_btn = tk.Button(
+            demo_btns,
+            text="■ Stop Recording",
+            font=("Helvetica", 12, "bold"),
+            highlightbackground=ACCENT,
+            width=14,
+            command=self._on_stop_recording,
+            state="disabled",
+        )
+        self._stop_record_btn.pack(side="left", padx=(0, 8))
+
+        self._process_btn = tk.Button(
+            demo_btns,
+            text="⚙ Process Demo",
+            font=("Helvetica", 12, "bold"),
+            highlightbackground="#2980b9",
+            width=14,
+            command=self._on_process_demo,
+        )
+        self._process_btn.pack(side="left")
+
+        self._demo_status_var = tk.StringVar(value="")
+        tk.Label(
+            demo_frame,
+            textvariable=self._demo_status_var,
+            font=("Helvetica", 9),
+            fg="#a0a0a0",
+            bg=BG,
+            wraplength=500,
+            justify="left",
+        ).pack(padx=8, pady=(0, 6), anchor="w")
+
         # ---- Routine section ----
         routine_frame = tk.LabelFrame(
             parent,
@@ -208,6 +281,16 @@ class GardeningTab:
             command=self._on_run_routine,
         )
         self._routine_start_btn.pack(side="left", padx=(0, 8))
+
+        self._smart_routine_btn = tk.Button(
+            routine_btns,
+            text="▶ Run Smart",
+            font=("Helvetica", 12, "bold"),
+            highlightbackground="#27ae60",
+            width=12,
+            command=self._on_run_smart_routine,
+        )
+        self._smart_routine_btn.pack(side="left", padx=(0, 8))
 
         self._routine_stop_btn = tk.Button(
             routine_btns,
@@ -388,7 +471,7 @@ class GardeningTab:
         name = self._flower_var.get()
         info = lookup_flower(name)
         if info is None:
-            self._status_var.set("Select a flower first")
+            self._status_var.set(_MSG_SELECT_FLOWER)
             return
 
         from vision import template_matcher as tm
@@ -397,7 +480,7 @@ class GardeningTab:
             self._calibrate_fn()
 
         if tm._global_scale is None:
-            self._status_var.set("Calibration failed — stand at garden first")
+            self._status_var.set(_MSG_CALIBRATION_FAILED)
             return
 
         _, beans = info
@@ -408,10 +491,101 @@ class GardeningTab:
         if self._routine_runner.running:
             self._routine_runner.stop()
             self._routine_start_btn.config(state="normal")
+            self._smart_routine_btn.config(state="normal")
             self._routine_stop_btn.config(state="disabled")
             self._routine_progress_var.set("")
         self._bot.stop()
         self._set_action_buttons_idle()
+
+    # ------------------------------------------------------------------
+    # Demo recording handlers
+    # ------------------------------------------------------------------
+
+    def _on_record_demo(self) -> None:
+        if self._demo_recorder.recording:
+            return
+
+        self._demo_recorder.on_status = lambda msg: self._root.after(
+            0, self._demo_status_var.set, msg
+        )
+        demo_dir = self._demo_recorder.start()
+        self._demo_status_var.set(f"Recording to {demo_dir}…")
+        self._record_btn.config(state="disabled")
+        self._stop_record_btn.config(state="normal")
+        self._process_btn.config(state="disabled")
+
+        self._recording_timer_id = self._root.after(1000, self._update_recording_status)
+
+    def _update_recording_status(self) -> None:
+        if not self._demo_recorder.recording:
+            return
+        elapsed = self._demo_recorder.duration
+        frames = self._demo_recorder.frame_count
+        self._demo_status_var.set(
+            f"Recording… {elapsed:.0f}s | {frames} frames captured"
+        )
+        self._recording_timer_id = self._root.after(1000, self._update_recording_status)
+
+    def _on_stop_recording(self) -> None:
+        if not self._demo_recorder.recording:
+            return
+
+        if hasattr(self, "_recording_timer_id"):
+            self._root.after_cancel(self._recording_timer_id)
+
+        self._demo_status_var.set("Stopping recording…")
+
+        import threading
+        def _stop():
+            summary = self._demo_recorder.stop()
+            if summary:
+                frames = summary.get("frame_count", 0)
+                dur = summary.get("duration_s", 0)
+                msg = f"Recorded {frames} frames in {dur:.0f}s. Click 'Process Demo' to build map."
+            else:
+                msg = "Recording stopped (no data)"
+            self._root.after(0, self._demo_status_var.set, msg)
+            self._root.after(0, self._record_btn.config, {"state": "normal"})
+            self._root.after(0, self._stop_record_btn.config, {"state": "disabled"})
+            self._root.after(0, self._process_btn.config, {"state": "normal"})
+
+        threading.Thread(target=_stop, daemon=True).start()
+
+    def _on_process_demo(self) -> None:
+        import glob as glob_mod
+
+        demos_dir = settings.DEMO_SAVE_DIR
+        if not os.path.isdir(demos_dir):
+            self._demo_status_var.set("No demos found. Record one first.")
+            return
+
+        demo_dirs = sorted(glob_mod.glob(os.path.join(demos_dir, "demo_*")))
+        if not demo_dirs:
+            self._demo_status_var.set("No demos found. Record one first.")
+            return
+
+        latest_demo = demo_dirs[-1]
+        self._demo_status_var.set(f"Processing {os.path.basename(latest_demo)}…")
+        self._process_btn.config(state="disabled")
+
+        import threading
+        def _process():
+            try:
+                processor = DemoProcessor(latest_demo)
+                summary = processor.process()
+                beds = summary.get("bed_arrivals", 0)
+                msg = f"Processed: {beds} beds detected. Map saved. Ready to Run Smart!"
+                self._root.after(0, self._demo_status_var.set, msg)
+            except Exception as exc:
+                self._root.after(0, self._demo_status_var.set, f"Processing failed: {exc}")
+            finally:
+                self._root.after(0, self._process_btn.config, {"state": "normal"})
+
+        threading.Thread(target=_process, daemon=True).start()
+
+    # ------------------------------------------------------------------
+    # Routine handlers
+    # ------------------------------------------------------------------
 
     def _on_run_routine(self) -> None:
         if self._routine_runner.running or self._bot.running:
@@ -438,12 +612,12 @@ class GardeningTab:
             self._calibrate_fn()
 
         if tm._global_scale is None:
-            self._status_var.set("Calibration failed — stand at garden first")
+            self._status_var.set(_MSG_CALIBRATION_FAILED)
             return
 
         flower_name = self._flower_var.get()
         if not flower_name:
-            self._status_var.set("Select a flower first")
+            self._status_var.set(_MSG_SELECT_FLOWER)
             return
 
         ref_path = os.path.join(settings.GARDENING_ROUTINES_DIR, "start_position.png")
@@ -456,9 +630,38 @@ class GardeningTab:
         self._set_action_buttons_running()
         self._routine_runner.start(path, default_flower=flower_name)
 
+    def _on_run_smart_routine(self) -> None:
+        """Run the smart routine using the garden map + navigator."""
+        if self._routine_runner.running or self._bot.running:
+            return
+
+        map_path = os.path.join(settings.GARDENING_ROUTINES_DIR, "garden_map.json")
+        if not os.path.isfile(map_path):
+            self._status_var.set("No garden map found — record + process a demo first")
+            return
+
+        flower_name = self._flower_var.get()
+        if not flower_name:
+            self._status_var.set(_MSG_SELECT_FLOWER)
+            return
+
+        from vision import template_matcher as tm
+        if tm._global_scale is None:
+            self._calibrate_fn()
+        if tm._global_scale is None:
+            self._status_var.set(_MSG_CALIBRATION_FAILED)
+            return
+
+        self._routine_start_btn.config(state="disabled")
+        self._smart_routine_btn.config(state="disabled")
+        self._routine_stop_btn.config(state="normal")
+        self._set_action_buttons_running()
+        self._routine_runner.start_smart(map_path, default_flower=flower_name)
+
     def _on_stop_routine(self) -> None:
         self._routine_runner.stop()
         self._routine_start_btn.config(state="normal")
+        self._smart_routine_btn.config(state="normal")
         self._routine_stop_btn.config(state="disabled")
         self._set_action_buttons_idle()
 
@@ -514,6 +717,7 @@ class GardeningTab:
     def _on_routine_ended_ui(self, reason: str) -> None:
         self._status_var.set(f"Routine: {reason}")
         self._routine_start_btn.config(state="normal")
+        self._smart_routine_btn.config(state="normal")
         self._routine_stop_btn.config(state="disabled")
         self._routine_progress_var.set("")
         self._set_action_buttons_idle()
@@ -523,6 +727,8 @@ class GardeningTab:
     # ------------------------------------------------------------------
 
     def shutdown(self) -> None:
+        if self._demo_recorder.recording:
+            self._demo_recorder.stop()
         if self._bot.running:
             self._bot.stop()
         if self._routine_runner.running:

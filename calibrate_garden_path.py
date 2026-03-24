@@ -23,11 +23,8 @@ import tkinter as tk
 from threading import Thread, Event
 
 import cv2
-import pyautogui
 from Quartz import (
-    CGEventCreateKeyboardEvent,
     CGEventGetIntegerValueField,
-    CGEventSourceCreate,
     CGEventTapCreate,
     CFMachPortCreateRunLoopSource,
     CFRunLoopGetCurrent,

@@ -90,21 +90,12 @@ def focus_window() -> bool:
         log.warning("Cannot focus: TTR window not found")
         return False
 
-    apps = NSRunningApplication.runningApplicationsWithBundleIdentifier_("")
     for app in NSRunningApplication.runningApplicationsWithBundleIdentifier_(""):
         if app.processIdentifier() == info.pid:
             app.activateWithOptions_(NSApplicationActivateIgnoringOtherApps)
             return True
 
-    # Fallback: iterate all running apps
-    workspace = Quartz.CGWindowListCopyWindowInfo(
-        Quartz.kCGWindowListOptionAll, Quartz.kCGNullWindowID
-    )
-    for app in NSRunningApplication.runningApplicationsWithBundleIdentifier_(""):
-        pass  # bundle ID unknown; try by PID below
-
-    running = NSRunningApplication.runningApplicationsWithBundleIdentifier_("")
-    # Use a broader approach: get all apps and match PID
+    # Fallback: iterate all running apps by PID
     from AppKit import NSWorkspace
     for app in NSWorkspace.sharedWorkspace().runningApplications():
         if app.processIdentifier() == info.pid:
