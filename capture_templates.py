@@ -54,6 +54,7 @@ GARDEN_STEP3_POST_PLANT = [
 
 GARDEN_STEP4_PLANTED_BED = [
     ("Watering_Can_Button.png", "WATERING CAN BUTTON"),
+    ("Pick_Flower_Button.png", "PICK FLOWER BUTTON (remove existing flower)"),
 ]
 
 

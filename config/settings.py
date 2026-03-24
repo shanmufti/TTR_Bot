@@ -106,6 +106,7 @@ TEMPLATE_NAMES = {
     "silver_jellybean_button": "Silver_Jellybean_Button.png",
     "blue_plant_button": "Blue_Plant_Button.png",
     "watering_can_button": "Watering_Can_Button.png",
+    "pick_flower_button": "Pick_Flower_Button.png",
 }
 
 # ---------------------------------------------------------------------------
@@ -134,9 +135,10 @@ FISHING_LOCATIONS = [
 # ---------------------------------------------------------------------------
 # Gardening
 # ---------------------------------------------------------------------------
-GARDEN_POST_BEAN_DELAY_S = 2.0  # wait after clicking each jellybean
-GARDEN_POST_PLANT_DELAY_S = 8.0  # wait after clicking the Plant button
-GARDEN_POST_CONFIRM_DELAY_S = 2.0  # wait after clicking OK confirmation
-GARDEN_POST_WATER_DELAY_S = 4.0  # wait between watering can clicks
-GARDEN_WATERS_AFTER_PLANT = 3  # times to water a newly planted flower
-GARDEN_FIND_TIMEOUT_S = 5.0  # max seconds to poll for a template
+GARDEN_POST_BEAN_DELAY_S = 0.1  # wait after clicking each jellybean
+GARDEN_POST_PLANT_DELAY_S = 6.0  # wait after clicking the Plant button
+GARDEN_POST_CONFIRM_DELAY_S = 1.0  # wait after clicking OK confirmation
+GARDEN_POST_WATER_DELAY_S = 3.0  # wait between watering can clicks
+GARDEN_POST_PICK_DELAY_S = 4.0  # wait after picking a flower (bed becomes empty)
+GARDEN_WATERS_AFTER_PLANT = 1  # times to water after planting
+GARDEN_FIND_TIMEOUT_S = 10.0  # max seconds to poll for a template

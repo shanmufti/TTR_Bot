@@ -56,7 +56,8 @@ def clear_cache() -> None:
     _global_scale = None
 
 
-_SCALE_RANGE = np.arange(0.5, 1.6, 0.1)
+_COARSE_SCALE_RANGE = np.arange(0.3, 2.1, 0.1)
+_FINE_STEP = 0.02
 _global_scale: float | None = None
 _scaled_template_cache: dict[str, np.ndarray] = {}
 
@@ -68,49 +69,62 @@ _CALIBRATION_ANCHORS = [
     "red_fishing_button",
     "exit_fishing_button",
     "plant_flower_button",
+    "pick_flower_button",
+    "watering_can_button",
 ]
+
+
+def _match_at_scale(
+    frame_bgr: np.ndarray, tmpl: np.ndarray, scale: float
+) -> float:
+    """Return the match confidence of *tmpl* at *scale* against *frame_bgr*."""
+    fh, fw = frame_bgr.shape[:2]
+    th, tw = tmpl.shape[:2]
+    new_w = int(tw * scale)
+    new_h = int(th * scale)
+    if new_w < 10 or new_h < 10 or new_w > fw or new_h > fh:
+        return -1.0
+    scaled = cv2.resize(tmpl, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+    result = cv2.matchTemplate(frame_bgr, scaled, cv2.TM_CCOEFF_NORMED)
+    _, max_val, _, _ = cv2.minMaxLoc(result)
+    return float(max_val)
 
 
 def calibrate_scale(frame_bgr: np.ndarray) -> float:
     """Determine the window scale by matching a known template across scales.
 
-    Tries multiple anchor templates (fishing button, exit button, plant button)
-    so calibration works whether the toon is at the dock or at the garden.
-    Returns the best scale, or -1.0 if calibration failed.
+    Uses a two-pass approach: coarse sweep (0.1 steps over 0.3-2.0) then a
+    fine sweep (0.02 steps around the best coarse hit). This finds the precise
+    scale even when the window is resized significantly from when templates
+    were captured.
+
+    Tries multiple anchor templates so calibration works at the fishing dock
+    or at the garden.  Returns the best scale, or -1.0 if calibration failed.
     """
     global _global_scale
     _scaled_template_cache.clear()
 
-    fh, fw = frame_bgr.shape[:2]
     overall_best_val = -1.0
     overall_best_scale = 1.0
+    best_anchor = ""
 
     for anchor in _CALIBRATION_ANCHORS:
         tmpl = _load_template(anchor)
         if tmpl is None:
             continue
 
-        th, tw = tmpl.shape[:2]
-        for scale in _SCALE_RANGE:
-            new_w = int(tw * scale)
-            new_h = int(th * scale)
-            if new_w < 10 or new_h < 10 or new_w > fw or new_h > fh:
-                continue
-            scaled = cv2.resize(tmpl, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
-            result = cv2.matchTemplate(frame_bgr, scaled, cv2.TM_CCOEFF_NORMED)
-            _, max_val, _, _ = cv2.minMaxLoc(result)
-            if max_val > overall_best_val:
-                overall_best_val = max_val
+        # Pass 1: coarse
+        for scale in _COARSE_SCALE_RANGE:
+            val = _match_at_scale(frame_bgr, tmpl, scale)
+            if val > overall_best_val:
+                overall_best_val = val
                 overall_best_scale = scale
+                best_anchor = anchor
 
         if overall_best_val >= _MIN_CALIBRATION_CONF:
-            log.info(
-                "calibrate_scale: anchor=%s scale=%.1f (conf=%.3f)",
-                anchor, overall_best_scale, overall_best_val,
-            )
             break
 
-    if overall_best_val < _MIN_CALIBRATION_CONF:
+    if overall_best_val < 0.30:
         log.warning(
             "calibrate_scale FAILED: best conf=%.3f (need %.2f). "
             "Make sure a known UI button is visible, then recalibrate.",
@@ -119,9 +133,30 @@ def calibrate_scale(frame_bgr: np.ndarray) -> float:
         _global_scale = None
         return -1.0
 
+    # Pass 2: fine-tune around the best coarse scale
+    tmpl = _load_template(best_anchor)
+    if tmpl is not None:
+        fine_range = np.arange(
+            overall_best_scale - 0.1, overall_best_scale + 0.1 + _FINE_STEP, _FINE_STEP
+        )
+        for scale in fine_range:
+            val = _match_at_scale(frame_bgr, tmpl, scale)
+            if val > overall_best_val:
+                overall_best_val = val
+                overall_best_scale = scale
+
+    if overall_best_val < _MIN_CALIBRATION_CONF:
+        log.warning(
+            "calibrate_scale FAILED: best conf=%.3f (need %.2f) after fine pass. "
+            "Make sure a known UI button is visible, then recalibrate.",
+            overall_best_val, _MIN_CALIBRATION_CONF,
+        )
+        _global_scale = None
+        return -1.0
+
     _global_scale = overall_best_scale
-    log.info("calibrate_scale: scale=%.1f (conf=%.3f) — locked",
-             overall_best_scale, overall_best_val)
+    log.info("calibrate_scale: anchor=%s scale=%.2f (conf=%.3f) — locked",
+             best_anchor, overall_best_scale, overall_best_val)
     return overall_best_scale
 
 
@@ -144,38 +179,54 @@ def _get_scaled_template(name: str) -> np.ndarray | None:
     return tmpl
 
 
+_FIND_SCALE_OFFSETS = np.array([0.0, -0.04, 0.04, -0.08, 0.08])
+
+
 def find_template(
     frame_bgr: np.ndarray,
     template_name: str,
     threshold: float = settings.TEMPLATE_MATCH_THRESHOLD,
 ) -> MatchResult | None:
-    """Find a template in the frame using the locked scale.
+    """Find a template in the frame around the calibrated scale.
 
-    Requires calibrate_scale() to have been called first (via the
-    Calibrate Window button). Single matchTemplate call, no fallback.
+    Tries the locked scale first, then probes ±0.04 and ±0.08 as fallbacks.
+    This handles templates captured at slightly different window sizes.
     """
     if _global_scale is None:
         log.warning("find_template called before calibration")
         return None
 
-    tmpl = _get_scaled_template(template_name)
-    if tmpl is None:
+    raw_tmpl = _load_template(template_name)
+    if raw_tmpl is None:
         return None
 
-    th, tw = tmpl.shape[:2]
     fh, fw = frame_bgr.shape[:2]
-    if tw > fw or th > fh:
-        return None
 
-    result = cv2.matchTemplate(frame_bgr, tmpl, cv2.TM_CCOEFF_NORMED)
-    _, max_val, _, max_loc = cv2.minMaxLoc(result)
+    for offset in _FIND_SCALE_OFFSETS:
+        scale = _global_scale + offset
+        new_w = int(raw_tmpl.shape[1] * scale)
+        new_h = int(raw_tmpl.shape[0] * scale)
+        if new_w < 10 or new_h < 10 or new_w > fw or new_h > fh:
+            continue
 
-    if max_val < threshold:
-        return None
+        if abs(offset) < 1e-9:
+            tmpl = _get_scaled_template(template_name)
+        else:
+            tmpl = cv2.resize(raw_tmpl, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
 
-    cx = max_loc[0] + tw // 2
-    cy = max_loc[1] + th // 2
-    return MatchResult(cx, cy, float(max_val), tw, th)
+        if tmpl is None:
+            continue
+
+        th, tw = tmpl.shape[:2]
+        result = cv2.matchTemplate(frame_bgr, tmpl, cv2.TM_CCOEFF_NORMED)
+        _, max_val, _, max_loc = cv2.minMaxLoc(result)
+
+        if max_val >= threshold:
+            cx = max_loc[0] + tw // 2
+            cy = max_loc[1] + th // 2
+            return MatchResult(cx, cy, float(max_val), tw, th)
+
+    return None
 
 
 def find_all_templates(

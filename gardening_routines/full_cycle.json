@@ -1,0 +1,89 @@
+{
+  "_description": "Auto-recorded garden path for 10 beds.",
+  "repeat": 1,
+  "beds": [
+    [],
+    [
+      {
+        "direction": "left",
+        "duration": 0.36
+      },
+      {
+        "direction": "up",
+        "duration": 0.511
+      },
+      {
+        "direction": "right",
+        "duration": 1.005
+      },
+      {
+        "direction": "right",
+        "duration": 0.072
+      },
+      {
+        "direction": "up",
+        "duration": 0.124
+      }
+    ],
+    [
+      {
+        "direction": "up",
+        "duration": 0.465
+      }
+    ],
+    [
+      {
+        "direction": "up",
+        "duration": 0.453
+      }
+    ],
+    [
+      {
+        "direction": "up",
+        "duration": 0.823
+      }
+    ],
+    [
+      {
+        "direction": "right",
+        "duration": 0.679
+      },
+      {
+        "direction": "up",
+        "duration": 0.256
+      }
+    ],
+    [
+      {
+        "direction": "up",
+        "duration": 0.752
+      },
+      {
+        "direction": "right",
+        "duration": 1.351
+      },
+      {
+        "direction": "up",
+        "duration": 0.207
+      }
+    ],
+    [
+      {
+        "direction": "up",
+        "duration": 0.399
+      }
+    ],
+    [
+      {
+        "direction": "up",
+        "duration": 0.63
+      }
+    ],
+    [
+      {
+        "direction": "up",
+        "duration": 0.747
+      }
+    ]
+  ]
+}
