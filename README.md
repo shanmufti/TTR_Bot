@@ -65,6 +65,8 @@ uv run python tools/capture_templates.py
 
 These are saved in `data/templates/` and reused across sessions.
 
+**Calibration** (the Calibrate button) matches those templates to learn UI scale. It works from the **golf minigame** as well as fishing or your estate, as long as a known element is on screen—typically the golf pencil, close, or turn timer (capture those in the tool if they look different on your machine). If the match is slightly noisy, the bot may still lock scale and log a relaxed-accept warning.
+
 ## Project Structure
 
 ```
