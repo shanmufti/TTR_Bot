@@ -15,6 +15,7 @@ env/
 Thumbs.db
 *.log
 logs/
+data/_debug/
 _debug_*.png
 .idea/
 .vscode/

@@ -63,9 +63,16 @@ _scaled_template_cache: dict[str, np.ndarray] = {}
 
 
 _MIN_CALIBRATION_CONF = 0.60
+# Dock/HUD can pick up grass/UI tint; still usable for scale when strict match fails.
+_MIN_CALIBRATION_CONF_RELAXED = 0.48
 
 
+# hud_bottom_right_icon first: visible in almost all states (golf, estate, streets).
 _CALIBRATION_ANCHORS = [
+    "hud_bottom_right_icon",
+    "golf_pencil_button",
+    "golf_close_button",
+    "golf_turn_timer",
     "red_fishing_button",
     "exit_fishing_button",
     "plant_flower_button",
@@ -98,8 +105,9 @@ def calibrate_scale(frame_bgr: np.ndarray) -> float:
     scale even when the window is resized significantly from when templates
     were captured.
 
-    Tries multiple anchor templates so calibration works at the fishing dock
-    or at the garden.  Returns the best scale, or -1.0 if calibration failed.
+    Tries multiple anchor templates: persistent HUD (bottom-right dock icon),
+    golf UI, fishing dock, garden. Uses a relaxed confidence floor when the
+    HUD is visible but colors vary. Returns the best scale, or -1.0 on failure.
     """
     global _global_scale
     _scaled_template_cache.clear()
@@ -126,9 +134,9 @@ def calibrate_scale(frame_bgr: np.ndarray) -> float:
 
     if overall_best_val < 0.30:
         log.warning(
-            "calibrate_scale FAILED: best conf=%.3f (need %.2f). "
-            "Make sure a known UI button is visible, then recalibrate.",
-            overall_best_val, _MIN_CALIBRATION_CONF,
+            "calibrate_scale FAILED: best conf=%.3f (no usable match). "
+            "Run: uv run python tools/snapshot_game_state.py --promote-template",
+            overall_best_val,
         )
         _global_scale = None
         return -1.0
@@ -145,18 +153,26 @@ def calibrate_scale(frame_bgr: np.ndarray) -> float:
                 overall_best_val = val
                 overall_best_scale = scale
 
-    if overall_best_val < _MIN_CALIBRATION_CONF:
+    if overall_best_val < _MIN_CALIBRATION_CONF_RELAXED:
         log.warning(
-            "calibrate_scale FAILED: best conf=%.3f (need %.2f) after fine pass. "
-            "Make sure a known UI button is visible, then recalibrate.",
-            overall_best_val, _MIN_CALIBRATION_CONF,
+            "calibrate_scale FAILED: best conf=%.3f (need %.2f). "
+            "Recapture HUD with tools/snapshot_game_state.py --promote-template",
+            overall_best_val, _MIN_CALIBRATION_CONF_RELAXED,
         )
         _global_scale = None
         return -1.0
 
     _global_scale = overall_best_scale
-    log.info("calibrate_scale: anchor=%s scale=%.2f (conf=%.3f) — locked",
-             best_anchor, overall_best_scale, overall_best_val)
+    if overall_best_val < _MIN_CALIBRATION_CONF:
+        log.warning(
+            "calibrate_scale: relaxed accept anchor=%s scale=%.2f (conf=%.3f)",
+            best_anchor, overall_best_scale, overall_best_val,
+        )
+    else:
+        log.info(
+            "calibrate_scale: anchor=%s scale=%.2f (conf=%.3f) — locked",
+            best_anchor, overall_best_scale, overall_best_val,
+        )
     return overall_best_scale
 
 

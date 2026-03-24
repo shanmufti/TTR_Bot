@@ -65,7 +65,15 @@ uv run python tools/capture_templates.py
 
 These are saved in `data/templates/` and reused across sessions.
 
-**Calibration** (the Calibrate button) matches those templates to learn UI scale. It works from the **golf minigame** as well as fishing or your estate, as long as a known element is on screen—typically the golf pencil, close, or turn timer (capture those in the tool if they look different on your machine). If the match is slightly noisy, the bot may still lock scale and log a relaxed-accept warning.
+To refresh the **general calibration** image (bottom-right Schticker Book on the dock), run:
+
+```bash
+uv run python tools/snapshot_game_state.py --promote-template
+```
+
+while the game is visible. That overwrites `data/templates/Hud_BottomRight_Icon.png`, which **Calibrate** tries first (same dock icon in golf, streets, estate, etc.).
+
+**Calibrate** also falls back to golf, fishing, and garden templates if the HUD image is missing or a poor match; noisy matches may still lock with a relaxed-accept warning in the log.
 
 ## Project Structure
 

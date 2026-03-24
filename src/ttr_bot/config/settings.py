@@ -88,6 +88,8 @@ BUBBLE_SCAN_STEP = 3  # pixel step when scanning for bubbles
 # ---------------------------------------------------------------------------
 TEMPLATE_MATCH_THRESHOLD = 0.65  # minimum confidence for a template match
 TEMPLATE_NAMES = {
+    # General HUD — always visible bottom-right (Schticker Book); best default calibration anchor
+    "hud_bottom_right_icon": "Hud_BottomRight_Icon.png",
     # Fishing
     "red_fishing_button": "Red_Fishing_Button.png",
     "sell_all_button": "Blue_Sell_All_Button.png",
