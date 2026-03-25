@@ -149,9 +149,9 @@ def detect_turn_timer_by_color(frame: np.ndarray) -> bool:
 
 
 def is_ready_to_swing(frame: np.ndarray) -> bool:
-    from ttr_bot.vision.template_matcher import _global_scale
+    from ttr_bot.vision import template_matcher as tm
 
-    if _global_scale is None:
+    if tm._global_scale is None:
         return detect_turn_timer_by_color(frame)
     t = tm.find_template(frame, "golf_turn_timer", threshold=0.70)
     if t is not None:

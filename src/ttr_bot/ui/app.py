@@ -343,8 +343,8 @@ class App:
         self._root.update_idletasks()
         self._on_calibrate()
 
-        from ttr_bot.vision.template_matcher import _global_scale
-        if _global_scale is None:
+        from ttr_bot.vision import template_matcher as tm
+        if tm._global_scale is None:
             self._status_var.set("Calibration failed — sit on dock first!")
             return
 
