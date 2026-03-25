@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import threading
 import time
+from time import perf_counter
 from typing import Callable
 
 from ttr_bot.config import settings
@@ -84,9 +85,18 @@ class GolfBot:
 
     def _run_continuous(self, holes_per_round: int) -> None:
         holes_played = 0
+        round_t0 = perf_counter()
 
         while holes_played < holes_per_round and not self._stop_event.is_set():
-            self._emit(f"Hole {holes_played + 1}/{holes_per_round}…")
+            hole_num = holes_played + 1
+            hole_t0 = perf_counter()
+            log.info(
+                "Golf [auto %d/%d] — start hole (round +%.1fs)",
+                hole_num,
+                holes_per_round,
+                perf_counter() - round_t0,
+            )
+            self._emit(f"Hole {hole_num}/{holes_per_round}…")
 
             manual = self.on_need_manual_course
 
@@ -100,22 +110,38 @@ class GolfBot:
             # Otherwise OCR still reads the previous hole's course name and we would stall forever
             # on "same course as last hole" or play the wrong JSON.
             if holes_played > 0:
-                self._emit("Waiting for your turn on this hole…")
-                wait_until_ready_to_swing(self._stop_event.is_set, interval_s=0.5)
+                self._emit("Step: wait for turn (before scoreboard)…")
+                wait_until_ready_to_swing(
+                    self._stop_event.is_set, interval_s=0.5, phase="pre_scoreboard"
+                )
                 if self._stop_event.is_set():
                     break
 
-            self._emit(f"Scanning for course (hole {holes_played + 1}/{holes_per_round})…")
+            self._emit("Step: detect course via scoreboard…")
+            t0 = perf_counter()
             stem = wait_for_course_detection(
                 self._stop_event.is_set,
                 scan_interval_s=settings.GOLF_SCAN_INTERVAL_S,
                 max_scoreboard_attempts=3,
                 on_need_manual=_wait_manual,
             )
+            log.info(
+                "Golf [auto %d/%d] — course detection finished in %.1fs (stem=%s)",
+                hole_num,
+                holes_per_round,
+                perf_counter() - t0,
+                stem or "None",
+            )
 
             if self._stop_event.is_set():
                 break
             if not stem:
+                log.warning(
+                    "Golf [auto %d/%d] — no stem; retrying loop (+%.1fs in hole)",
+                    hole_num,
+                    holes_per_round,
+                    perf_counter() - hole_t0,
+                )
                 continue
 
             if not action_file_exists(stem):
@@ -123,27 +149,57 @@ class GolfBot:
                 time.sleep(2.0)
                 continue
 
-            self._emit(f"Detected: {stem} — waiting for your turn…")
-            wait_until_ready_to_swing(self._stop_event.is_set, interval_s=0.5)
+            self._emit("Step: wait for turn (before swing)…")
+            wait_until_ready_to_swing(
+                self._stop_event.is_set, interval_s=0.5, phase="pre_swing"
+            )
             if self._stop_event.is_set():
                 break
 
+            log.info(
+                "Golf [auto %d/%d] — pre-swing delay %.1fs",
+                hole_num,
+                holes_per_round,
+                settings.GOLF_PRE_SWING_DELAY_S,
+            )
             time.sleep(settings.GOLF_PRE_SWING_DELAY_S)
 
             path = path_for_stem(stem)
-            self._emit(f"Playing {stem}…")
+            self._emit(f"Step: replay JSON — {stem}")
+            t_play = perf_counter()
             perform_golf_actions(path, self._stop_event)
+            log.info(
+                "Golf [auto %d/%d] — replay finished in %.1fs (file=%s)",
+                hole_num,
+                holes_per_round,
+                perf_counter() - t_play,
+                path,
+            )
             if self._stop_event.is_set():
                 break
 
             holes_played += 1
             self._emit(f"Hole {holes_played}/{holes_per_round} done.")
+            log.info(
+                "Golf [auto %d/%d] — hole complete in %.1fs total",
+                holes_played,
+                holes_per_round,
+                perf_counter() - hole_t0,
+            )
 
             if holes_played < holes_per_round:
-                self._emit("Waiting for next hole…")
+                self._emit(
+                    f"Step: between-holes sleep {settings.GOLF_BETWEEN_HOLES_DELAY_S:.0f}s…"
+                )
                 time.sleep(settings.GOLF_BETWEEN_HOLES_DELAY_S)
 
         if self._stop_event.is_set():
             self._emit("Golf stopped.")
         else:
             self._emit("Round complete.")
+        log.info(
+            "Golf [auto] — round finished in %.1fs (holes=%d/%d)",
+            perf_counter() - round_t0,
+            holes_played,
+            holes_per_round,
+        )

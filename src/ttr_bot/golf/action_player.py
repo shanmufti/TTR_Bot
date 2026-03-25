@@ -6,6 +6,7 @@ import json
 import os
 import threading
 import time
+from time import perf_counter
 from dataclasses import dataclass
 from typing import Callable
 
@@ -122,9 +123,17 @@ def perform_golf_actions(
     actions = load_actions(file_path)
     total = count_executable_actions(actions)
     step_i = 0
+    t_replay = perf_counter()
+
+    log.info(
+        "Golf [replay] — start %s (%d executable steps)",
+        os.path.basename(file_path),
+        total,
+    )
 
     inp.ensure_focused()
     time.sleep(1.0)
+    log.debug("Golf [replay] — focus + 1.0s settle done in %.2fs", perf_counter() - t_replay)
 
     for i, cmd in enumerate(actions):
         if stop_event.is_set():
@@ -145,12 +154,27 @@ def perform_golf_actions(
         if on_step:
             on_step(step_i, total, cmd.action, next_label, cmd.duration)
 
+        t_step = perf_counter()
+        log.info(
+            "Golf [replay] — step %d/%d %s duration_ms=%d (next: %s, +%.2fs in replay)",
+            step_i,
+            total,
+            cmd.action,
+            cmd.duration,
+            next_label,
+            t_step - t_replay,
+        )
+
         if cmd.action == "DELAY TIME":
             deadline = time.monotonic() + cmd.duration / 1000.0
             while time.monotonic() < deadline:
                 if stop_event.is_set():
                     return
                 time.sleep(min(0.1, deadline - time.monotonic()))
+            log.info(
+                "Golf [replay] — DELAY TIME done in %.2fs",
+                perf_counter() - t_step,
+            )
             continue
 
         key = _ACTION_KEYS.get(cmd.action)
@@ -169,5 +193,15 @@ def perform_golf_actions(
                 time.sleep(min(0.05, end - time.monotonic()))
         finally:
             pyautogui.keyUp(key)
+        log.info(
+            "Golf [replay] — key %s held %.2fs (step wall %.2fs)",
+            key,
+            hold_s,
+            perf_counter() - t_step,
+        )
 
-    log.info("Golf actions completed: %s", file_path)
+    log.info(
+        "Golf [replay] — completed %s in %.1fs",
+        file_path,
+        perf_counter() - t_replay,
+    )

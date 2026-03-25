@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from time import perf_counter
 from typing import Callable
 
 import numpy as np
@@ -82,6 +83,25 @@ def detect_course_from_frame(frame: np.ndarray) -> str | None:
             return m
 
     return None
+
+
+def _ocr_debug_snippet(frame: np.ndarray, max_chars: int = 200) -> str:
+    """Short OCR sample from HUD regions for logs when course match fails."""
+    h, w = frame.shape[:2]
+    regions = [
+        (0, w // 4, w // 2, h // 6),
+        (0, 0, w, h // 8),
+        (h // 10, w // 4, w // 2, h // 8),
+    ]
+    parts: list[str] = []
+    for y0, x0, rw, rh in regions:
+        y1, x1 = min(h, y0 + rh), min(w, x0 + rw)
+        crop = frame[y0:y1, x0:x1]
+        text = read_text_from_bgr(crop)
+        if text.strip():
+            parts.append(text.strip().replace("\n", " "))
+    s = " | ".join(parts)[:max_chars]
+    return repr(s) if s else "(empty OCR)"
 
 
 def is_scoreboard_open(frame: np.ndarray) -> bool:
@@ -182,28 +202,74 @@ def close_scoreboard_if_open() -> None:
 
 def detect_course_via_scoreboard() -> str | None:
     """Open scoreboard with pencil, OCR course, close."""
+    t0 = perf_counter()
     if not click_template_or_none("golf_pencil_button", threshold=0.78):
         log.warning(
-            "Golf: pencil template not found — capture data/templates/Golf_Pencil_Button.png "
-            "(tools/capture_templates.py --golf)",
+            "Golf [scoreboard] — pencil click failed in %.2fs — capture "
+            "data/templates/Golf_Pencil_Button.png (tools/capture_templates.py --golf)",
+            perf_counter() - t0,
         )
         return None
 
+    log.debug("Golf [scoreboard] — pencil clicked, sleeping 0.6s for UI")
     time.sleep(0.6)
     frame = _frame_or_none()
     if frame is None:
+        log.warning("Golf [scoreboard] — no frame after pencil (%.2fs)", perf_counter() - t0)
         return None
 
     course = detect_course_from_frame(frame)
+    if course is None:
+        log.info(
+            "Golf [scoreboard] — OCR no course match in %.2fs — sample %s",
+            perf_counter() - t0,
+            _ocr_debug_snippet(frame),
+        )
+    else:
+        log.info(
+            "Golf [scoreboard] — OCR matched %r in %.2fs",
+            course,
+            perf_counter() - t0,
+        )
     close_scoreboard_if_open()
     return course
 
 
-def wait_until_ready_to_swing(stop_event: Callable[[], bool], interval_s: float = 0.5) -> None:
+def wait_until_ready_to_swing(
+    stop_event: Callable[[], bool],
+    interval_s: float = 0.5,
+    *,
+    phase: str = "",
+) -> None:
+    """Poll until turn timer visible. Logs every ~3s with elapsed time."""
+    t0 = perf_counter()
+    polls = 0
+    last_log = t0
+    phase_tag = f" {phase}" if phase else ""
+
     while not stop_event():
+        polls += 1
         frame = _frame_or_none()
         if frame is not None and is_ready_to_swing(frame):
+            log.info(
+                "Golf [wait_ready%s] — ready after %.1fs (%d polls, interval=%.2fs)",
+                phase_tag,
+                perf_counter() - t0,
+                polls,
+                interval_s,
+            )
             return
+        now = perf_counter()
+        if now - last_log >= 3.0:
+            last_log = now
+            reason = "no TTR frame" if frame is None else "turn timer template/color not detected"
+            log.info(
+                "Golf [wait_ready%s] — still waiting %.1fs (%d polls, %s)",
+                phase_tag,
+                now - t0,
+                polls,
+                reason,
+            )
         time.sleep(interval_s)
 
 
@@ -215,19 +281,43 @@ def wait_for_course_detection(
 ) -> str | None:
     """Poll until a course is identified or cancelled."""
     attempts = 0
+    cycle = 0
+    t_round = perf_counter()
     while not stop_event():
+        cycle += 1
         if attempts < max_scoreboard_attempts:
+            log.info(
+                "Golf [course_detect] — cycle %d attempt %d/%d (+%.1fs)",
+                cycle,
+                attempts + 1,
+                max_scoreboard_attempts,
+                perf_counter() - t_round,
+            )
             course = detect_course_via_scoreboard()
             if course is not None:
-                log.info("Golf: detected course stem %s", course)
+                log.info(
+                    "Golf [course_detect] — stem %r total %.1fs",
+                    course,
+                    perf_counter() - t_round,
+                )
                 return course
             attempts += 1
+            log.debug(
+                "Golf [course_detect] — sleep %.1fs before retry",
+                scan_interval_s,
+            )
             _sleep_interruptible(scan_interval_s, stop_event)
         else:
+            log.warning(
+                "Golf [course_detect] — %d scoreboard attempts failed; manual pick or retry (+%.1fs)",
+                max_scoreboard_attempts,
+                perf_counter() - t_round,
+            )
             options = list_action_stems()
             if on_need_manual and options:
                 picked = on_need_manual(options)
                 if picked:
+                    log.info("Golf [course_detect] — manual stem %r", picked)
                     return picked
             attempts = 0
             _sleep_interruptible(scan_interval_s, stop_event)
