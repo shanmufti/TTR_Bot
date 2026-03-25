@@ -183,7 +183,10 @@ def close_scoreboard_if_open() -> None:
 def detect_course_via_scoreboard() -> str | None:
     """Open scoreboard with pencil, OCR course, close."""
     if not click_template_or_none("golf_pencil_button", threshold=0.78):
-        log.warning("Golf: pencil template not found — add templates/golf_pencil_button.png")
+        log.warning(
+            "Golf: pencil template not found — capture data/templates/Golf_Pencil_Button.png "
+            "(tools/capture_templates.py --golf)",
+        )
         return None
 
     time.sleep(0.6)

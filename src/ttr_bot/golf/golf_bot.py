@@ -84,10 +84,9 @@ class GolfBot:
 
     def _run_continuous(self, holes_per_round: int) -> None:
         holes_played = 0
-        last_stem: str | None = None
 
         while holes_played < holes_per_round and not self._stop_event.is_set():
-            self._emit(f"Scanning for course (hole {holes_played + 1}/{holes_per_round})…")
+            self._emit(f"Hole {holes_played + 1}/{holes_per_round}…")
 
             manual = self.on_need_manual_course
 
@@ -97,6 +96,16 @@ class GolfBot:
                 self._emit("No course detected — add pytesseract+tesseract, templates, or JSON files.")
                 return None
 
+            # After hole 1+, wait until the turn timer appears *before* opening the scoreboard.
+            # Otherwise OCR still reads the previous hole's course name and we would stall forever
+            # on "same course as last hole" or play the wrong JSON.
+            if holes_played > 0:
+                self._emit("Waiting for your turn on this hole…")
+                wait_until_ready_to_swing(self._stop_event.is_set, interval_s=0.5)
+                if self._stop_event.is_set():
+                    break
+
+            self._emit(f"Scanning for course (hole {holes_played + 1}/{holes_per_round})…")
             stem = wait_for_course_detection(
                 self._stop_event.is_set,
                 scan_interval_s=settings.GOLF_SCAN_INTERVAL_S,
@@ -107,12 +116,6 @@ class GolfBot:
             if self._stop_event.is_set():
                 break
             if not stem:
-                continue
-
-            if stem == last_stem:
-                log.info("Golf: same course as last hole, waiting…")
-                self._emit("Waiting for next hole to load…")
-                time.sleep(2.0)
                 continue
 
             if not action_file_exists(stem):
@@ -134,7 +137,6 @@ class GolfBot:
                 break
 
             holes_played += 1
-            last_stem = stem
             self._emit(f"Hole {holes_played}/{holes_per_round} done.")
 
             if holes_played < holes_per_round:
