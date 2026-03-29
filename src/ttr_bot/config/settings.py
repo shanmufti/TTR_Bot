@@ -5,11 +5,12 @@ import os
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+PROJECT_ROOT = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+)
 DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 TEMPLATES_DIR = os.path.join(DATA_DIR, "templates")
 LOGS_DIR = os.path.join(PROJECT_ROOT, "logs")
-GARDENING_ROUTINES_DIR = os.path.join(DATA_DIR, "gardening_routines")
 GOLF_ACTIONS_DIR = os.path.join(DATA_DIR, "golf_actions")
 SELL_PATHS_DIR = os.path.join(DATA_DIR, "sell_paths")
 
@@ -156,14 +157,13 @@ GARDEN_FIND_TIMEOUT_S = 10.0  # max seconds to poll for a template
 # ---------------------------------------------------------------------------
 # Gardening – sweep navigation
 # ---------------------------------------------------------------------------
-SWEEP_CHECK_INTERVAL_S = 2.0  # seconds of walking between bed-detection polls
+SWEEP_CHECK_INTERVAL_S = 0.3  # seconds of walking between bed-detection polls
+SWEEP_WALK_BURST_S = 0.8  # walk+curve duration per step (up, or up+left/right)
+SWEEP_TURN_BURST_S = 0.2  # base turn duration (scaled by magnitude 0-1)
+SWEEP_SCAN_ROTATE_S = 0.18  # rotation duration when scanning for flowers
 SWEEP_TARGET_BEDS = 10  # expected flower beds per estate garden
 SWEEP_MAX_LAPS = 3  # perimeter laps before giving up
-SWEEP_POST_INTERACT_WALK_S = 2.0  # walk-away time after interacting with a bed
-SWEEP_TURN_RATE_DEG_S = 36.0  # estimated character turn rate (degrees/second)
-SWEEP_WALK_SPEED = 1.0  # arbitrary map-units per second (for relative mapping)
-SWEEP_MAP_JSON = os.path.join(GARDENING_ROUTINES_DIR, "sweep_map.json")
-SWEEP_MAP_IMAGE = os.path.join(DATA_DIR, "_debug", "garden_map.png")
+SWEEP_POST_INTERACT_WALK_S = 0.6  # walk-away time after interacting with a bed
 
 # ---------------------------------------------------------------------------
 # Golf (Custom Golf Actions JSON — same format as Toontown-Rewritten-Bot)

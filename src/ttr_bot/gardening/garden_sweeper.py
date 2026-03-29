@@ -13,7 +13,6 @@ Navigation approach:
 4.  When buttons appear → interact with the bed.
 5.  After interacting, walk away and scan again.
 6.  If no flowers are visible, rotate slowly until some come into view.
-7.  Falls back to a perimeter walk pattern if vision fails repeatedly.
 """
 
 from __future__ import annotations
@@ -24,6 +23,7 @@ import threading
 from dataclasses import dataclass
 from typing import Callable
 
+import cv2
 import pyautogui
 
 from ttr_bot.config import settings
@@ -31,10 +31,11 @@ from ttr_bot.core import input_controller as inp
 from ttr_bot.core.screen_capture import capture_window
 from ttr_bot.core.window_manager import find_ttr_window
 from ttr_bot.vision import template_matcher as tm
-from ttr_bot.vision.flower_detector import steering_hint
+from ttr_bot.vision.flower_detector import steering_hint, debug_annotate
 from ttr_bot.gardening.gardening_bot import GardenBot
-from ttr_bot.gardening.garden_mapper import GardenMapper
 from ttr_bot.utils.logger import log
+
+_DEBUG_DIR = os.path.join(settings.DATA_DIR, "_debug", "sweep")
 
 
 _BED_BUTTONS = (
@@ -46,23 +47,6 @@ _BED_BUTTONS = (
 
 _ARROW_KEYS = ("up", "down", "left", "right")
 
-# Fallback rectangular walk pattern used when vision finds no flowers.
-_FALLBACK_WALK_PATTERN: list[tuple[list[str], float]] = [
-    (["up"], 8.0),
-    (["right"], 2.5),
-    (["up"], 6.0),
-    (["right"], 2.5),
-    (["up"], 8.0),
-    (["right"], 2.5),
-    (["up"], 6.0),
-    (["right"], 2.5),
-]
-
-_VISUAL_WALK_BURST_S = 1.5
-_VISUAL_TURN_BURST_S = 0.4
-_VISUAL_SCAN_ROTATE_S = 0.6
-_MAX_BLIND_ROTATIONS = 12
-
 
 @dataclass
 class SweepResult:
@@ -70,16 +54,12 @@ class SweepResult:
     beds_planted: int = 0
     beds_watered: int = 0
     beds_picked: int = 0
-    laps_completed: int = 0
-    phase2_navigations: int = 0
     total_time_s: float = 0.0
     reason: str = ""
-    map_image_path: str = ""
-    map_json_path: str = ""
 
 
 class GardenSweeper:
-    """Walk-and-scan garden automation with live 2-D mapping."""
+    """Walk-and-scan garden automation using flower vision."""
 
     def __init__(
         self,
@@ -88,12 +68,15 @@ class GardenSweeper:
     ) -> None:
         self._bot = garden_bot
         self._stop_event = stop_event
-        self._mapper = GardenMapper()
         self.on_status: Callable[[str], None] | None = None
+        self._debug_seq = 0
+        os.makedirs(_DEBUG_DIR, exist_ok=True)
 
-    @property
-    def mapper(self) -> GardenMapper:
-        return self._mapper
+    def _debug_save(self, frame, label: str) -> None:
+        self._debug_seq += 1
+        path = os.path.join(_DEBUG_DIR, f"{self._debug_seq:03d}_{label}.png")
+        cv2.imwrite(path, frame)
+        log.info("[DEBUG] saved %s", path)
 
     # ------------------------------------------------------------------
     # Public API
@@ -105,17 +88,18 @@ class GardenSweeper:
         bean_sequence: str,
         target_beds: int = 0,
         max_laps: int = 0,
-        walk_pattern: list[tuple[list[str], float]] | None = None,
-        saved_map_path: str | None = None,
     ) -> SweepResult:
         if target_beds <= 0:
             target_beds = settings.SWEEP_TARGET_BEDS
         if max_laps <= 0:
             max_laps = settings.SWEEP_MAX_LAPS
-        pattern = walk_pattern or _FALLBACK_WALK_PATTERN
         result = SweepResult()
         t0 = time.monotonic()
 
+        self._debug_seq = 0
+        for f in os.listdir(_DEBUG_DIR):
+            if f.endswith(".png"):
+                os.remove(os.path.join(_DEBUG_DIR, f))
         self._status(f"Starting sweep — {flower_name}, target {target_beds} beds")
 
         if not self._bot._ensure_calibrated():
@@ -123,68 +107,25 @@ class GardenSweeper:
             return result
 
         try:
-            self._run_sweep_phases(
-                pattern,
-                max_laps,
-                flower_name,
-                bean_sequence,
-                result,
-                target_beds,
-                saved_map_path,
-            )
+            self._discover(max_laps, flower_name, bean_sequence, result, target_beds)
         finally:
             self._release_all_keys()
-
-        result.map_json_path, result.map_image_path = self._save_map()
 
         result.total_time_s = time.monotonic() - t0
         result.reason = (
             "User stopped"
             if self._stop_event.is_set()
-            else f"Done — {result.beds_visited} beds in "
-            f"{result.laps_completed} laps + "
-            f"{result.phase2_navigations} targeted navs"
+            else f"Done — {result.beds_visited} beds"
         )
         self._print_summary(result)
         return result
 
-    def _run_sweep_phases(
-        self,
-        pattern: list[tuple[list[str], float]],
-        max_laps: int,
-        flower_name: str,
-        bean_sequence: str,
-        result: SweepResult,
-        target_beds: int,
-        saved_map_path: str | None,
-    ) -> None:
-        loaded_map = self._try_load_map(saved_map_path)
-        if loaded_map is not None:
-            self._mapper = loaded_map
-            self._status(
-                f"Loaded saved map with {self._mapper.bed_count} beds "
-                "— skipping to targeted navigation"
-            )
-        else:
-            self._phase1_discovery(
-                pattern,
-                max_laps,
-                flower_name,
-                bean_sequence,
-                result,
-                target_beds,
-            )
-
-        if not self._should_stop(result, target_beds) and self._mapper.bed_count > 0:
-            self._phase2_targeted(flower_name, bean_sequence, result, target_beds)
-
     # ------------------------------------------------------------------
-    # Phase 1: Visual discovery
+    # Visual discovery loop
     # ------------------------------------------------------------------
 
-    def _phase1_discovery(
+    def _discover(
         self,
-        pattern: list[tuple[list[str], float]],
         max_laps: int,
         flower_name: str,
         bean_sequence: str,
@@ -194,180 +135,78 @@ class GardenSweeper:
         bed_btn = self._detect_bed(fast=False)
         if bed_btn is not None:
             self._status("Already at a bed — interacting")
-            self._mapper.mark_bed(bed_btn)
             self._interact_at_bed(flower_name, bean_sequence, result)
             self._walk_away()
 
-        self._status("Phase 1 — visual scan-and-navigate")
-        blind_streak = 0
+        self._status("Visual scan-and-navigate")
 
-        for _ in range(max_laps * len(pattern)):
+        max_iterations = max_laps * 50
+        idle_count = 0
+        last_beds = result.beds_visited
+        for _ in range(max_iterations):
             if self._should_stop(result, target_beds):
                 break
+
+            if result.beds_visited > last_beds:
+                idle_count = 0
+                last_beds = result.beds_visited
 
             frame = self._grab_frame()
             if frame is None:
                 break
 
             direction, magnitude = steering_hint(frame)
+            self._debug_save(debug_annotate(frame, direction, magnitude), f"steer_{direction}")
 
             if direction == "none":
-                blind_streak += 1
-                if blind_streak > _MAX_BLIND_ROTATIONS:
-                    self._status("No flowers visible — falling back to walk pattern")
-                    self._run_fallback_lap(
-                        pattern, flower_name, bean_sequence, result, target_beds,
-                    )
-                    result.laps_completed += 1
-                    blind_streak = 0
+                idle_count += 1
+                if idle_count >= 10:
+                    self._recover_from_stuck()
+                    idle_count = 0
                     continue
-                self._status(f"Scanning… rotating to find flowers ({blind_streak})")
-                self._execute_turn(["right"], _VISUAL_SCAN_ROTATE_S)
+                if idle_count <= 4:
+                    self._status(f"No flowers — walking forward to search ({idle_count})")
+                    outcome = self._walk_and_scan(["up"], settings.SWEEP_WALK_BURST_S)
+                    if outcome == "bed_found":
+                        self._interact_at_bed(flower_name, bean_sequence, result)
+                        self._walk_away()
+                else:
+                    self._status("No flowers — rotating to scan")
+                    self._key_burst(["right"], settings.SWEEP_SCAN_ROTATE_S)
                 continue
 
-            blind_streak = 0
+            idle_count = 0
 
             if direction in ("left", "right"):
-                turn_dur = _VISUAL_TURN_BURST_S * max(0.3, magnitude)
-                self._status(f"Flowers visible {direction} — turning")
-                self._execute_turn([direction], turn_dur)
+                turn_dur = settings.SWEEP_TURN_BURST_S * magnitude
+                self._status(f"Flowers {direction} ({magnitude:.2f}) — turning {turn_dur:.2f}s")
+                self._key_burst([direction], turn_dur)
 
             self._status(
-                f"Walking toward flowers "
-                f"(visited {result.beds_visited}/{target_beds})"
+                f"Walking toward flowers (visited {result.beds_visited}/{target_beds})"
             )
-            outcome = self._walk_and_scan(["up"], _VISUAL_WALK_BURST_S)
+            outcome = self._walk_and_scan(["up"], settings.SWEEP_WALK_BURST_S)
             if outcome == "bed_found":
                 self._interact_at_bed(flower_name, bean_sequence, result)
                 self._walk_away()
 
-    def _run_fallback_lap(
-        self,
-        pattern: list[tuple[list[str], float]],
-        flower_name: str,
-        bean_sequence: str,
-        result: SweepResult,
-        target_beds: int,
-    ) -> None:
-        """Execute one lap of the fixed rectangular walk pattern."""
-        for keys, duration in pattern:
-            if self._should_stop(result, target_beds):
-                break
-            is_turn = "up" not in keys and "down" not in keys
-            if is_turn:
-                self._execute_turn(keys, duration)
-            else:
-                outcome = self._walk_and_scan(keys, duration)
-                if outcome == "bed_found":
-                    self._interact_at_bed(flower_name, bean_sequence, result)
-                    self._walk_away()
-
     # ------------------------------------------------------------------
-    # Phase 2: Targeted navigation via map
-    # ------------------------------------------------------------------
-
-    def _phase2_targeted(
-        self,
-        flower_name: str,
-        bean_sequence: str,
-        result: SweepResult,
-        target_beds: int,
-    ) -> None:
-        visited_ids: set[int] = set()
-        route = self._mapper.plan_route(visited_ids)
-        if not route:
-            return
-
-        self._status(
-            f"Phase 2 — navigating to {len(route)} known beds (nearest-neighbor route)"
-        )
-
-        for bed in route:
-            if self._should_stop(result, target_beds):
-                break
-
-            keys, est_duration = self._mapper.direction_to(bed.x, bed.y)
-            if not keys:
-                continue
-
-            self._status(
-                f"Phase 2 · heading to bed #{bed.index} "
-                f"({'+'.join(keys)} ~{est_duration:.1f}s)"
-            )
-
-            arrived = self._navigate_to_target(est_duration, bed.x, bed.y)
-            result.phase2_navigations += 1
-
-            if arrived:
-                self._mapper.mark_bed(self._detect_bed() or bed.bed_type)
-                self._interact_at_bed(flower_name, bean_sequence, result)
-                visited_ids.add(bed.index)
-                self._walk_away()
-            else:
-                self._status(f"Phase 2 · missed bed #{bed.index} — continuing")
-
-    def _navigate_to_target(
-        self,
-        est_duration: float,
-        target_x: float,
-        target_y: float,
-    ) -> bool:
-        """Steer toward a mapped target, polling for bed arrival.
-
-        Recalculates heading each iteration so the character self-corrects:
-        first a turn action, then forward walking.
-        """
-        check = settings.SWEEP_CHECK_INTERVAL_S
-        elapsed = 0.0
-        budget = est_duration * 1.5 + 2.0
-
-        while elapsed < budget:
-            if self._stop_event.is_set():
-                return False
-
-            keys, remaining = self._mapper.direction_to(target_x, target_y)
-            if not keys or remaining < 0.15:
-                break
-
-            burst = min(check, budget - elapsed, remaining)
-            self._key_burst(keys, burst)
-            self._mapper.update(keys, burst)
-            elapsed += burst
-
-            bed_btn = self._detect_bed()
-            if bed_btn is not None:
-                time.sleep(0.3)
-                if self._detect_bed() is not None:
-                    return True
-
-        return self._detect_bed() is not None
-
-    # ------------------------------------------------------------------
-    # Walk-and-scan (Phase 1 core loop)
+    # Walk-and-scan
     # ------------------------------------------------------------------
 
     def _grab_frame(self):
-        """Capture the current game frame, or None on failure."""
         win = find_ttr_window()
         if win is None:
             return None
         return capture_window(win)
-
-    def _execute_turn(self, keys: list[str], duration: float) -> None:
-        """Turn in place without bed-detection overhead."""
-        if self._stop_event.is_set():
-            return
-        self._key_burst(keys, duration)
-        self._mapper.update(keys, duration)
 
     def _walk_and_scan(
         self,
         keys: list[str],
         leg_duration: float,
     ) -> str:
-        """Walk using *keys* for *leg_duration*, polling for beds.
+        """Walk for *leg_duration*, polling for beds.
 
-        Every burst is recorded in the mapper.
         Returns ``"bed_found"``, ``"leg_complete"``, or ``"stopped"``.
         """
         check_interval = settings.SWEEP_CHECK_INTERVAL_S
@@ -379,25 +218,23 @@ class GardenSweeper:
 
             burst = min(check_interval, leg_duration - elapsed)
             self._key_burst(keys, burst)
-            self._mapper.update(keys, burst)
             elapsed += burst
 
             bed_btn = self._detect_bed()
             if bed_btn is not None:
+                detect_frame = self._grab_frame()
+                if detect_frame is not None:
+                    self._debug_save(detect_frame, f"bed_detect_{bed_btn}")
                 time.sleep(0.3)
                 bed_btn = self._detect_bed()
                 if bed_btn is not None:
                     self._status(f"Bed detected via {bed_btn}")
-                    self._mapper.mark_bed(bed_btn)
                     return "bed_found"
-                # Walked past — back up a little.
                 self._key_burst(["down"], 0.6)
-                self._mapper.update(["down"], 0.6)
                 time.sleep(0.3)
                 bed_btn = self._detect_bed()
                 if bed_btn is not None:
                     self._status("Bed confirmed after backtrack")
-                    self._mapper.mark_bed(bed_btn)
                     return "bed_found"
 
         return "leg_complete"
@@ -407,12 +244,6 @@ class GardenSweeper:
     # ------------------------------------------------------------------
 
     def _detect_bed(self, fast: bool = True) -> str | None:
-        """Return the bed-indicator button visible on screen, or None.
-
-        Checks Remove *before* Pick because the two templates look similar
-        and Pick can false-positive when Remove is the real button.
-        When *fast=True*, uses the locked scale only (no fallback probes).
-        """
         win = find_ttr_window()
         if win is None:
             return None
@@ -431,6 +262,7 @@ class GardenSweeper:
         bean_sequence: str,
         result: SweepResult,
     ) -> None:
+        self._bot._click_cache.clear()
         result.beds_visited += 1
         bed_num = result.beds_visited
         self._status(f"Bed #{bed_num}: checking state…")
@@ -443,21 +275,59 @@ class GardenSweeper:
             return
 
         state = self._classify_bed_state(frame)
+
+        debug_frame = frame.copy()
+        cv2.putText(debug_frame, f"STATE: {state}", (20, 40),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 255), 3)
+        y_off = 80
+        for btn_name in _BED_BUTTONS:
+            m = tm.find_template(frame, btn_name)
+            label = f"{btn_name}: {m.confidence:.3f} @({m.x},{m.y})" if m else f"{btn_name}: ---"
+            cv2.putText(debug_frame, label, (20, y_off),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+            y_off += 30
+        self._debug_save(debug_frame, f"bed{bed_num}_state_{state}")
         self._execute_bed_action(state, bed_num, flower_name, bean_sequence, result)
         time.sleep(0.5)
 
-    def _classify_bed_state(self, frame) -> str:
-        """Return one of 'pick', 'plant', 'growing', 'water', or 'unknown'."""
-        has_remove = tm.find_template(frame, "remove_button") is not None
-        if has_remove:
-            has_water = tm.find_template(frame, "watering_can_button") is not None
-            return "growing" if has_water else "unknown"
+    _WATER_CONF_MIN = 0.85
 
-        if tm.find_template(frame, "pick_flower_button") is not None:
+    def _classify_bed_state(self, frame) -> str:
+        """Return 'pick', 'plant', 'growing', 'water', 'full', or 'unknown'.
+
+        Pick and Remove are mutually exclusive buttons occupying the same
+        sidebar slot.  Both templates can match the same region, so we
+        trust whichever scores higher confidence.
+
+        'full' means the bed has a growing flower that is fully watered
+        (watering can icon shows "Full", matching at low confidence).
+        """
+        remove_match = tm.find_template(frame, "remove_button")
+        pick_match = tm.find_template(frame, "pick_flower_button")
+        water_match = tm.find_template(frame, "watering_can_button")
+
+        if pick_match is not None and remove_match is not None:
+            log.info("  pick=%.3f @(%d,%d)  remove=%.3f @(%d,%d)",
+                     pick_match.confidence, pick_match.x, pick_match.y,
+                     remove_match.confidence, remove_match.x, remove_match.y)
+            if pick_match.confidence >= remove_match.confidence:
+                return "pick"
+
+        if pick_match is not None and remove_match is None:
+            log.info("  pick=%.3f (no remove)", pick_match.confidence)
             return "pick"
+
         if tm.find_template(frame, "plant_flower_button") is not None:
             return "plant"
-        if tm.find_template(frame, "watering_can_button") is not None:
+
+        if remove_match is not None:
+            can_water = water_match is not None and water_match.confidence >= self._WATER_CONF_MIN
+            log.info("  remove=%.3f  water=%s",
+                     remove_match.confidence,
+                     f"{water_match.confidence:.3f}" if water_match else "none")
+            return "growing" if can_water else "full"
+
+        if water_match is not None and water_match.confidence >= self._WATER_CONF_MIN:
             return "water"
         return "unknown"
 
@@ -476,10 +346,12 @@ class GardenSweeper:
             if self._bot._plant_flower(flower_name, bean_sequence):
                 result.beds_planted += 1
         elif state in ("growing", "water"):
-            label = "growing — watering only" if state == "growing" else "watering"
+            label = "growing — watering" if state == "growing" else "watering"
             self._status(f"Bed #{bed_num}: {label}")
             if self._bot._water_plant(settings.GARDEN_WATERS_AFTER_PLANT):
                 result.beds_watered += 1
+        elif state == "full":
+            self._status(f"Bed #{bed_num}: fully watered — skipping")
 
     def _do_pick_and_plant(
         self,
@@ -500,12 +372,26 @@ class GardenSweeper:
     # Movement helpers
     # ------------------------------------------------------------------
 
+    def _recover_from_stuck(self) -> None:
+        """Walk backward and turn to escape camera-clipping / stuck spots."""
+        self._status("Stuck — recovering…")
+        self._key_burst(["down"], 1.0)
+        time.sleep(0.2)
+        self._key_burst(["right"], 0.8)
+        time.sleep(0.2)
+        self._key_burst(["up"], 0.6)
+        time.sleep(0.2)
+
     def _walk_away(self) -> None:
-        """Walk forward to leave the bed's interaction zone."""
-        dur = settings.SWEEP_POST_INTERACT_WALK_S
-        self._key_burst(["up"], dur)
-        self._mapper.update(["up"], dur)
-        time.sleep(0.3)
+        self._key_burst(["down"], settings.SWEEP_POST_INTERACT_WALK_S)
+        time.sleep(0.2)
+        for _ in range(6):
+            if self._stop_event.is_set():
+                return
+            if self._detect_bed() is None:
+                return
+            self._key_burst(["down"], 0.3)
+            time.sleep(0.2)
 
     def _key_burst(self, keys: list[str], duration: float) -> None:
         inp.ensure_focused()
@@ -519,7 +405,6 @@ class GardenSweeper:
                 pyautogui.keyUp(k)
 
     def _release_all_keys(self) -> None:
-        """Force-release all arrow keys (e.g. after stop while keys are held)."""
         try:
             inp.ensure_focused()
         except Exception:
@@ -537,32 +422,6 @@ class GardenSweeper:
                 return False
             time.sleep(min(0.05, deadline - time.monotonic()))
         return True
-
-    # ------------------------------------------------------------------
-    # Map persistence
-    # ------------------------------------------------------------------
-
-    def _try_load_map(self, path: str | None) -> GardenMapper | None:
-        if path is None:
-            path = settings.SWEEP_MAP_JSON
-        if not os.path.isfile(path):
-            return None
-        try:
-            return GardenMapper.load(path)
-        except Exception as exc:
-            log.warning("Failed to load saved map: %s", exc)
-            return None
-
-    def _save_map(self) -> tuple[str, str]:
-        json_path = settings.SWEEP_MAP_JSON
-        img_path = settings.SWEEP_MAP_IMAGE
-        try:
-            self._mapper.save(json_path)
-            self._mapper.save_image(img_path)
-            self._status(f"Map saved ({self._mapper.bed_count} beds)")
-        except Exception as exc:
-            log.warning("Failed to save map: %s", exc)
-        return json_path, img_path
 
     # ------------------------------------------------------------------
     # Helpers
@@ -588,11 +447,8 @@ class GardenSweeper:
             f" Planted:            {r.beds_planted}\n"
             f" Picked:             {r.beds_picked}\n"
             f" Watered:            {r.beds_watered}\n"
-            f" Discovery laps:     {r.laps_completed}\n"
-            f" Targeted navs:      {r.phase2_navigations}\n"
             f" Time:               {int(r.total_time_s) // 60}m "
             f"{int(r.total_time_s) % 60:02d}s\n"
-            f" Map:                {r.map_image_path}\n"
             f"{'═' * 44}"
         )
         self._status(msg)

@@ -33,65 +33,23 @@ BEAN_CHAR_TO_TEMPLATE: dict[str, str] = {
 # Flowers grouped by bean count (1-8).
 # Key = bean count, value = dict of {flower_name: bean_sequence}.
 FLOWERS: dict[int, dict[str, str]] = {
-    1: {
-        "Laff-o-dil": "r",
-        "Daffy Dil": "g",
-        "What-in Carnation": "i",
-        "School Daisy": "b",
-        "Lily-of-the-Alley": "o",
-    },
-    2: {
-        "Summer's Last Rose": "rr",
-        "Corn Rose": "ry",
-        "Tinted Rose": "ri",
-        "Chim Pansy": "gg",
-        "Potsen Pansy": "gr",
-        "Dandy Pansy": "gb",
-        "Midsummer Daisy": "bg",
-        "Freshasa Daisy": "by",
-        "Lazy Daisy": "bb",
-        "Lily Pad": "oc",
-        "Tiger Lily": "oy",
-    },
     3: {
-        "Stinking Rose": "rrr",
-        "Istilla Rose": "rbu",
-        "Hybrid Red Rose": "rry",
-        "Onelip": "ryy",
-        "Twolip": "ryg",
-        "Threelip": "ryb",
+        "Summer's Last Rose": "rrr",
     },
     4: {
-        "Marzi Pansy": "gggg",
-        "Instant Carnation": "iiii",
-        "Side Carnation": "iirr",
-        "Daisy Bell": "bbbb",
-        "Livered Lily": "oooo",
+        "Giraff-o-dil": "giyy",
     },
     5: {
-        "Indubitab Rose": "rrrry",
-        "Car Petunia": "uuuub",
-        "Platoonia": "uuuuy",
-        "Crazy Daisy": "bbbbb",
-        "Hazy Daisy": "bbbby",
+        "Chili Lily": "crrrr",
     },
     6: {
-        "Trance Orchid": "uuuubb",
-        "Giraff-o-dil": "rrrrrr",
-        "Dande-lion": "oooooo",
-        "Lily-of-the-Valley": "ooooyy",
+        "Silly Lily": "cruuuu",
     },
     7: {
-        "Model Orchid": "uuuubbb",
-        "Nurture Rose": "rrrrryy",
-        "Smarty Pansy": "ggggggg",
-        "Upsy Daisy": "bbbbbbb",
+        "Model Carnation": "iggggyg",
     },
     8: {
-        "Bossa Nova Rose": "rrrrryyy",
-        "Time-and-a-half-o-dil": "rrrrrrrr",
-        "Chili Lily": "oooooooo",
-        "Lily of the Nile": "ooooooyy",
+        "Istilla Rose": "rbuubbib",
     },
 }
 
