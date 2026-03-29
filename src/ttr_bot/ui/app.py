@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import os
-import subprocess
-import sys
 import tkinter as tk
 from tkinter import ttk, scrolledtext
 import logging
@@ -12,7 +9,6 @@ import logging
 from ttr_bot.config import settings
 from ttr_bot.core.window_manager import is_window_available
 from ttr_bot.fishing.fishing_bot import FishingBot, FishingConfig, FishingStats
-from ttr_bot.fishing.sell_controller import list_sell_paths
 from ttr_bot.ui.overlay import OverlayWindow
 from ttr_bot.utils.logger import log
 
@@ -44,9 +40,6 @@ class _TkLogHandler(logging.Handler):
 class App:
     """Main application window with tabbed Fishing / Gardening / Golf UI."""
 
-    _SELL_AUTO = "(auto)"
-
-    # Shared theme constants
     BG = "#0f3460"
     FG = "#eaeaea"
     ACCENT = "#e94560"
@@ -56,7 +49,7 @@ class App:
         self._root = tk.Tk()
         self._root.title("TTR Bot")
         screen_w = self._root.winfo_screenwidth()
-        self._root.geometry(f"520x750+{screen_w - 540}+30")
+        self._root.geometry(f"520x650+{screen_w - 540}+30")
         self._root.resizable(False, False)
         self._root.configure(bg=self.BG)
 
@@ -66,7 +59,6 @@ class App:
         self._build_ui()
         self._attach_logger()
         self._wire_callbacks()
-        self._on_location_changed()
         self._poll_window_status()
 
     # ------------------------------------------------------------------
@@ -77,7 +69,7 @@ class App:
         root = self._root
         bg, fg, accent, entry_bg = self.BG, self.FG, self.ACCENT, self.ENTRY_BG
 
-        # ---- Shared header ----
+        # ---- Header ----
         tk.Label(
             root, text="TTR Bot", font=("Helvetica", 18, "bold"),
             fg=accent, bg=bg,
@@ -90,7 +82,7 @@ class App:
         )
         self._status_label.pack()
 
-        # ---- Shared calibrate button ----
+        # ---- Calibrate button ----
         cal_frame = tk.Frame(root, bg=bg)
         cal_frame.pack(fill="x", padx=12, pady=(6, 2))
 
@@ -126,7 +118,7 @@ class App:
             golf_frame, self._root, self._status_var, self._on_calibrate,
         )
 
-        # ---- Shared log output ----
+        # ---- Log output ----
         log_label = tk.Label(
             root, text="Log", font=("Helvetica", 10, "bold"),
             fg=fg, bg=bg, anchor="w",
@@ -147,7 +139,6 @@ class App:
         bg, fg, accent, entry_bg = self.BG, self.FG, self.ACCENT, self.ENTRY_BG
         pad = {"padx": 8, "pady": 4}
 
-        # ---- Settings frame ----
         settings_frame = tk.LabelFrame(
             parent, text="Settings", font=("Helvetica", 11, "bold"),
             fg=fg, bg=bg, bd=1, relief="groove",
@@ -156,48 +147,13 @@ class App:
 
         row = 0
 
-        # Location
-        tk.Label(settings_frame, text="Location:", fg=fg, bg=bg).grid(
-            row=row, column=0, sticky="w", padx=8, pady=3,
-        )
-        self._location_var = tk.StringVar(value=settings.FISHING_LOCATIONS[0])
-        loc_combo = ttk.Combobox(
-            settings_frame, textvariable=self._location_var,
-            values=settings.FISHING_LOCATIONS, state="readonly", width=28,
-        )
-        loc_combo.grid(row=row, column=1, sticky="w", padx=4, pady=3)
-        loc_combo.bind("<<ComboboxSelected>>", lambda _: self._on_location_changed())
-        row += 1
-
-        # Casts
-        tk.Label(settings_frame, text="Casts per round:", fg=fg, bg=bg).grid(
+        # Max casts
+        tk.Label(settings_frame, text="Max casts:", fg=fg, bg=bg).grid(
             row=row, column=0, sticky="w", padx=8, pady=3,
         )
         self._casts_var = tk.IntVar(value=settings.DEFAULT_CASTS)
         tk.Spinbox(
             settings_frame, from_=1, to=999, textvariable=self._casts_var,
-            width=8, bg=entry_bg, fg=fg, insertbackground=fg,
-        ).grid(row=row, column=1, sticky="w", padx=4, pady=3)
-        row += 1
-
-        # Sell rounds
-        tk.Label(settings_frame, text="Sell rounds:", fg=fg, bg=bg).grid(
-            row=row, column=0, sticky="w", padx=8, pady=3,
-        )
-        self._sells_var = tk.IntVar(value=settings.DEFAULT_SELL_ROUNDS)
-        tk.Spinbox(
-            settings_frame, from_=1, to=99, textvariable=self._sells_var,
-            width=8, bg=entry_bg, fg=fg, insertbackground=fg,
-        ).grid(row=row, column=1, sticky="w", padx=4, pady=3)
-        row += 1
-
-        # Variance
-        tk.Label(settings_frame, text="Cast variance (px):", fg=fg, bg=bg).grid(
-            row=row, column=0, sticky="w", padx=8, pady=3,
-        )
-        self._variance_var = tk.IntVar(value=settings.DEFAULT_VARIANCE)
-        tk.Spinbox(
-            settings_frame, from_=0, to=100, textvariable=self._variance_var,
             width=8, bg=entry_bg, fg=fg, insertbackground=fg,
         ).grid(row=row, column=1, sticky="w", padx=4, pady=3)
         row += 1
@@ -213,57 +169,9 @@ class App:
         ).grid(row=row, column=1, sticky="w", padx=4, pady=3)
         row += 1
 
-        # Sell path
-        tk.Label(settings_frame, text="Sell path:", fg=fg, bg=bg).grid(
-            row=row, column=0, sticky="w", padx=8, pady=3,
-        )
-        sell_outer = tk.Frame(settings_frame, bg=bg)
-        sell_outer.grid(row=row, column=1, sticky="w", padx=4, pady=3)
-
-        sell_row1 = tk.Frame(sell_outer, bg=bg)
-        sell_row1.pack(anchor="w")
-
-        sell_options = self._get_sell_path_options()
-        default_sell = next(
-            (n for n in sell_options if "donalds" in n.lower() or "dreamland" in n.lower()),
-            self._SELL_AUTO,
-        )
-        self._sell_path_var = tk.StringVar(value=default_sell)
-        self._sell_path_combo = ttk.Combobox(
-            sell_row1, textvariable=self._sell_path_var,
-            values=sell_options, state="readonly", width=20,
-        )
-        self._sell_path_combo.pack(side="left")
-
-        tk.Button(
-            sell_row1, text="Record", font=("Helvetica", 9),
-            highlightbackground="#533483",
-            command=self._on_record_sell_path,
-        ).pack(side="left", padx=(6, 0))
-
-        tk.Button(
-            sell_row1, text="↻", font=("Helvetica", 9),
-            highlightbackground=entry_bg, width=2,
-            command=self._refresh_sell_paths,
-        ).pack(side="left", padx=(4, 0))
-
-        self._sell_status_var = tk.StringVar(value="")
-        self._sell_status_label = tk.Label(
-            sell_outer, textvariable=self._sell_status_var,
-            font=("Helvetica", 9), fg="#a0a0a0", bg=bg, anchor="w",
-        )
-        self._sell_status_label.pack(anchor="w", pady=(2, 0))
-        row += 1
-
-        # Checkboxes
+        # Overlay checkbox
         checks_frame = tk.Frame(settings_frame, bg=bg)
         checks_frame.grid(row=row, column=0, columnspan=2, sticky="w", padx=8, pady=3)
-
-        self._quickcast_var = tk.BooleanVar(value=False)
-        tk.Checkbutton(
-            checks_frame, text="Quick cast", variable=self._quickcast_var,
-            fg=fg, bg=bg, selectcolor=entry_bg, activebackground=bg, activeforeground=fg,
-        ).pack(side="left", padx=(0, 12))
 
         self._overlay_var = tk.BooleanVar(value=True)
         tk.Checkbutton(
@@ -295,24 +203,18 @@ class App:
         )
         self._pause_btn.pack(side="left")
 
-        # ---- Test / Cast calibration ----
-        test_frame = tk.Frame(parent, bg=bg)
-        test_frame.pack(fill="x", padx=8, pady=(0, 4))
-
-        self._test_sell_btn = tk.Button(
-            test_frame, text="Test Sell Trip", font=("Helvetica", 11),
-            highlightbackground="#b8860b", width=14, command=self._on_test_sell,
-        )
-        self._test_sell_btn.pack(side="left", padx=(0, 8))
+        # ---- Cast calibration ----
+        cal_frame = tk.Frame(parent, bg=bg)
+        cal_frame.pack(fill="x", padx=8, pady=(0, 4))
 
         self._cast_cal_btn = tk.Button(
-            test_frame, text="Calibrate Cast", font=("Helvetica", 11),
+            cal_frame, text="Calibrate Cast", font=("Helvetica", 11),
             highlightbackground="#e67e22", width=14, command=self._on_calibrate_cast,
         )
         self._cast_cal_btn.pack(side="left", padx=(0, 8))
 
         self._cast_cal_status = tk.Label(
-            test_frame, text="", font=("Helvetica", 10), fg="#e67e22", bg=bg,
+            cal_frame, text="", font=("Helvetica", 10), fg="#e67e22", bg=bg,
         )
         self._cast_cal_status.pack(side="left")
 
@@ -327,12 +229,12 @@ class App:
         log.addHandler(handler)
 
     def _wire_callbacks(self) -> None:
-        self._bot.on_stats_update = self._on_stats_update_thread
-        self._bot.on_status_update = self._on_status_update_thread
-        self._bot.on_fishing_ended = self._on_fishing_ended_thread
+        self._bot.on_stats_update = self._on_stats_thread
+        self._bot.on_status_update = self._on_status_thread
+        self._bot.on_fishing_ended = self._on_ended_thread
 
     # ------------------------------------------------------------------
-    # Fishing button handlers
+    # Fishing handlers
     # ------------------------------------------------------------------
 
     def _on_start(self) -> None:
@@ -355,23 +257,9 @@ class App:
             self._status_var.set("Run Calibrate Cast first!")
             return
 
-        sell_path_file = None
-        sell_choice = self._sell_path_var.get()
-        if sell_choice and sell_choice != self._SELL_AUTO:
-            for entry in list_sell_paths():
-                if entry["name"] == sell_choice:
-                    sell_path_file = entry["path"]
-                    break
-
         cfg = FishingConfig(
-            location=self._location_var.get(),
-            casts_per_round=self._casts_var.get(),
-            sell_rounds=self._sells_var.get(),
-            variance=self._variance_var.get(),
-            auto_detect=True,
-            quick_cast=self._quickcast_var.get(),
+            max_casts=self._casts_var.get(),
             bite_timeout=float(self._timeout_var.get()),
-            sell_path_file=sell_path_file,
         )
 
         if self._overlay_var.get() and self._overlay is None:
@@ -380,8 +268,6 @@ class App:
         self._start_btn.config(state="disabled")
         self._stop_btn.config(state="normal")
         self._pause_btn.config(state="normal")
-
-        log.info("Starting fishing: %s", cfg)
         self._bot.start(cfg)
 
     def _on_stop(self) -> None:
@@ -396,14 +282,12 @@ class App:
         self._pause_btn.config(text=text)
 
     def _on_calibrate(self) -> None:
-        """Detect the current TTR window bounds and lock them for the session."""
         from ttr_bot.core.window_manager import find_ttr_window, set_calibrated_bounds
         from ttr_bot.vision.template_matcher import clear_cache, calibrate_scale
         from ttr_bot.core.screen_capture import capture_window
 
         win = find_ttr_window()
         if win is None:
-            log.warning("Calibration failed: TTR window not found")
             self._status_var.set("Calibration failed — TTR not found")
             return
 
@@ -413,7 +297,6 @@ class App:
         clear_cache()
         frame = capture_window(win)
         if frame is None:
-            log.warning("Could not capture frame — check Screen Recording permission")
             self._status_var.set("Calibration failed — capture error")
             return
 
@@ -478,31 +361,26 @@ class App:
 
                 before = capture_window(win)
                 if before is None:
-                    log.warning("Cast calibration: capture failed on cast %d", idx + 1)
                     continue
 
                 new_btn = find_template(before, "red_fishing_button")
                 if new_btn is not None:
                     btn = new_btn
                 else:
-                    log.warning("Cast button not found for calibration cast %d", idx + 1)
                     continue
 
                 ensure_focused()
                 fishing_cast_raw(btn.x, btn.y, drag_dx, drag_dy, window=win)
-
                 time.sleep(2.0)
 
                 after = capture_window(win)
                 if after is None:
-                    log.warning("Cast calibration: post-cast capture failed")
                     continue
 
                 landing = detect_bobber(
                     before, after, pond.x, pond.y, pond.width, pond.height,
                 )
                 if landing is None:
-                    log.warning("Cast calibration: bobber not detected for cast %d", idx + 1)
                     self._cast_cal_status.config(text=f"Bobber not found ({idx + 1}/{total})")
                     time.sleep(12.0)
                     continue
@@ -536,87 +414,9 @@ class App:
 
         threading.Thread(target=_run, daemon=True).start()
 
-    def _on_test_sell(self) -> None:
-        """Run a test sell trip in a background thread (calibrate + sell)."""
-        import threading
-
-        def _run():
-            try:
-                from ttr_bot.core.window_manager import find_ttr_window, focus_window
-                from ttr_bot.core.screen_capture import capture_window
-                from ttr_bot.vision.template_matcher import calibrate_scale, clear_cache
-                from ttr_bot.fishing.sell_controller import walk_and_sell
-
-                self._test_sell_btn.config(state="disabled", text="Running…")
-                log.info("Test sell: starting…")
-
-                focus_window()
-                import time
-                time.sleep(0.3)
-                win = find_ttr_window()
-                if win is None:
-                    log.warning("Test sell: TTR window not found")
-                    return
-
-                clear_cache()
-                frame = capture_window(win)
-                if frame is not None:
-                    calibrate_scale(frame)
-
-                location = self._location_var.get()
-                walk_and_sell(location)
-                log.info("Test sell: complete")
-            except Exception as exc:
-                log.exception("Test sell failed: %s", exc)
-            finally:
-                self._root.after(0, lambda: self._test_sell_btn.config(
-                    state="normal", text="Test Sell Trip",
-                ))
-
-        threading.Thread(target=_run, daemon=True).start()
-
     # ------------------------------------------------------------------
-    # Fishing helpers
+    # Overlay
     # ------------------------------------------------------------------
-
-    def _get_sell_path_options(self) -> list[str]:
-        options = [self._SELL_AUTO]
-        for entry in list_sell_paths():
-            options.append(entry["name"])
-        return options
-
-    def _get_sell_path_names(self) -> set[str]:
-        return {e["name"].lower() for e in list_sell_paths()}
-
-    def _on_location_changed(self) -> None:
-        location = self._location_var.get()
-        if location == "Fish Anywhere":
-            self._sell_status_var.set("No sell needed for Fish Anywhere")
-            self._sell_status_label.config(fg="#a0a0a0")
-            return
-
-        recorded = self._get_sell_path_names()
-        if location.lower() in recorded:
-            self._sell_status_var.set(f"Sell path found for {location}")
-            self._sell_status_label.config(fg="#1a8f3c")
-        else:
-            self._sell_status_var.set(f"No sell path for {location} — click Record")
-            self._sell_status_label.config(fg="#e94560")
-
-    def _refresh_sell_paths(self) -> None:
-        options = self._get_sell_path_options()
-        self._sell_path_combo["values"] = options
-        log.info("Refreshed sell paths: %d custom paths found", len(options) - 1)
-        self._on_location_changed()
-
-    def _on_record_sell_path(self) -> None:
-        script = os.path.join(settings.PROJECT_ROOT, "tools", "record_sell_path.py")
-        location = self._location_var.get()
-        cmd = f'cd "{settings.PROJECT_ROOT}" && uv run python "{script}" --name "{location}"'
-        subprocess.Popen(
-            ["osascript", "-e", f'tell app "Terminal" to do script "{cmd}"'],
-        )
-        log.info("Launched sell-path recorder for '%s'", location)
 
     def _toggle_overlay(self) -> None:
         if self._overlay_var.get():
@@ -629,28 +429,23 @@ class App:
                 self._overlay.hide()
 
     # ------------------------------------------------------------------
-    # Thread-safe callbacks from the fishing bot
+    # Thread-safe callbacks
     # ------------------------------------------------------------------
 
-    def _on_stats_update_thread(self, stats: FishingStats) -> None:
-        self._root.after(0, self._on_stats_update_ui, stats)
+    def _on_stats_thread(self, stats: FishingStats) -> None:
+        self._root.after(0, self._on_stats_ui, stats)
 
-    def _on_status_update_thread(self, msg: str) -> None:
-        self._root.after(0, self._on_status_update_ui, msg)
+    def _on_status_thread(self, msg: str) -> None:
+        self._root.after(0, self._status_var.set, msg)
 
-    def _on_fishing_ended_thread(self, reason: str) -> None:
-        self._root.after(0, self._on_fishing_ended_ui, reason)
+    def _on_ended_thread(self, reason: str) -> None:
+        self._root.after(0, self._on_ended_ui, reason)
 
-    def _on_stats_update_ui(self, stats: FishingStats) -> None:
+    def _on_stats_ui(self, stats: FishingStats) -> None:
         if self._overlay:
             self._overlay.update_stats(stats)
 
-    def _on_status_update_ui(self, msg: str) -> None:
-        self._status_var.set(msg)
-        if self._overlay:
-            self._overlay.update_status(msg)
-
-    def _on_fishing_ended_ui(self, reason: str) -> None:
+    def _on_ended_ui(self, reason: str) -> None:
         self._status_var.set(f"Stopped: {reason}")
         self._start_btn.config(state="normal")
         self._stop_btn.config(state="disabled")
@@ -673,8 +468,8 @@ class App:
                 self._status_var.set(
                     "TTR window detected" if available else "TTR window not found"
                 )
-            can_start_fishing = available and not busy_other
-            self._start_btn.config(state="normal" if can_start_fishing else "disabled")
+            can_start = available and not busy_other
+            self._start_btn.config(state="normal" if can_start else "disabled")
         self._root.after(2000, self._poll_window_status)
 
     # ------------------------------------------------------------------

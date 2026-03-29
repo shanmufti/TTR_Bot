@@ -14,14 +14,9 @@ class OverlayWindow:
         self._root.title("TTR Bot Overlay")
         self._root.overrideredirect(True)
         self._root.attributes("-topmost", True)
-
-        # macOS transparency
         self._root.attributes("-alpha", 0.85)
-
         self._root.configure(bg="#1a1a2e")
-
-        # Position: top-right corner
-        self._root.geometry("260x160+20+40")
+        self._root.geometry("260x140+20+40")
 
         self._root.bind("<Button-1>", self._start_move)
         self._root.bind("<B1-Motion>", self._do_move)
@@ -41,9 +36,9 @@ class OverlayWindow:
         stats_frame = tk.Frame(self._root, bg="#1a1a2e")
         stats_frame.pack(pady=(6, 4), padx=10, fill="x")
 
-        self._round_label = self._stat_row(stats_frame, "Round:", "—", 0)
-        self._casts_label = self._stat_row(stats_frame, "Casts:", "0", 1)
-        self._fish_label = self._stat_row(stats_frame, "Fish:", "0", 2)
+        self._casts_label = self._stat_row(stats_frame, "Casts:", "0", 0)
+        self._caught_label = self._stat_row(stats_frame, "Caught:", "0", 1)
+        self._missed_label = self._stat_row(stats_frame, "Missed:", "0", 2)
 
         self._visible = True
 
@@ -73,9 +68,9 @@ class OverlayWindow:
         if not self._visible:
             return
         try:
-            self._round_label.config(text=f"{stats.current_round}/{stats.total_rounds}")
-            self._casts_label.config(text=f"{stats.session_casts}  (round: {stats.cast_count})")
-            self._fish_label.config(text=f"{stats.session_fish}  (round: {stats.fish_caught})")
+            self._casts_label.config(text=str(stats.casts))
+            self._caught_label.config(text=str(stats.caught))
+            self._missed_label.config(text=str(stats.missed))
         except tk.TclError:
             pass
 

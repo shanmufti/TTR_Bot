@@ -20,29 +20,15 @@ SELL_PATHS_DIR = os.path.join(DATA_DIR, "sell_paths")
 GAME_WINDOW_TITLE = "Toontown Rewritten"
 
 # ---------------------------------------------------------------------------
-# Fishing – general
+# Fishing
 # ---------------------------------------------------------------------------
 DEFAULT_CASTS = 20
-DEFAULT_SELL_ROUNDS = 3
-DEFAULT_VARIANCE = 15  # pixels of random left/right when casting
-CAST_DRAG_DISTANCE = 150  # base pixels to drag downward (logical)
+CAST_DRAG_DISTANCE = 150  # base pixels to drag downward (random-cast fallback)
 CAST_DRAG_HOLD_MS = 500  # hold time during drag (ms)
 BITE_TIMEOUT_S = 12  # max seconds to wait before recasting
 BITE_POLL_INTERVAL_S = 0.10  # seconds between bite-check polls
 POST_CAST_DELAY_S = 1.0  # wait after cast before polling for bite
-POST_CAST_DELAY_QUICK_S = 0.2  # shorter delay when quick-casting
-POST_CATCH_DELAY_S = 0.3  # wait after catch before closing popup
-BETWEEN_CAST_DELAY_S = (
-    0.2  # wait between successive casts (game needs time to reset rod)
-)
-SELL_WALK_DELAY_S = 2.0  # settle time after returning from sell trip
-
-# ---------------------------------------------------------------------------
-# Fishing – fish detection
-# ---------------------------------------------------------------------------
-FISH_WAIT_BEFORE_CAST = False  # wait for shadow before casting
-FISH_WAIT_TIMEOUT_S = 20  # max seconds to wait for a shadow
-FISH_WAIT_SCAN_DELAY_S = 2.0  # delay between detection scans
+BETWEEN_CAST_DELAY_S = 0.2  # wait between successive casts (rod reset animation)
 
 # ---------------------------------------------------------------------------
 # Vision – water / pond
@@ -50,7 +36,6 @@ FISH_WAIT_SCAN_DELAY_S = 2.0  # delay between detection scans
 WATER_HUE_RANGE = (80, 140)  # H range in HSV (teal/cyan)
 WATER_SAT_MIN = 40  # minimum saturation
 WATER_VAL_MIN = 50  # minimum value/brightness
-POND_SCAN_STEP = 5  # pixel step when scanning for water
 POND_TOP_MARGIN = 80  # skip top UI region
 POND_BOTTOM_MARGIN = 250  # skip bottom dock region
 POND_SIDE_MARGIN = 80  # skip left/right edges
@@ -60,8 +45,6 @@ POND_PADDING = 15  # padding around detected pond area
 # ---------------------------------------------------------------------------
 # Vision – fish shadow detection
 # ---------------------------------------------------------------------------
-SHADOW_SCAN_STEP = 3  # pixel step when scanning for shadows
-SHADOW_BLOB_MAX_DISTANCE = 12  # max pixel distance to cluster blobs
 SHADOW_MIN_ASPECT = 0.3  # minimum blob aspect ratio
 SHADOW_MAX_ASPECT = 3.0  # maximum blob aspect ratio
 SHADOW_MIN_FILL = 0.2  # minimum fill ratio of bounding box
@@ -125,23 +108,6 @@ TEMPLATE_NAMES = {
 # ---------------------------------------------------------------------------
 PYAUTOGUI_PAUSE = 0.05  # global pyautogui pause between actions
 PYAUTOGUI_FAILSAFE = True  # move mouse to corner to abort
-
-# ---------------------------------------------------------------------------
-# Fishing locations (for sell-walk sequences)
-# ---------------------------------------------------------------------------
-FISHING_LOCATIONS = [
-    "Donalds Dreamland",
-    "Fish Anywhere",
-    "Estate (Left Dock)",
-    "TTC Punchline Place",
-    "DD Lighthouse Lane",
-    "DG Elm Street",
-    "MM Tenor Terrace",
-    "Brrrgh Polar Place",
-    "Brrrgh Walrus Way",
-    "Brrrgh Sleet Street",
-    "DDL Lullaby Lane",
-]
 
 # ---------------------------------------------------------------------------
 # Gardening
