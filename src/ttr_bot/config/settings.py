@@ -24,7 +24,7 @@ GAME_WINDOW_TITLE = "Toontown Rewritten"
 # ---------------------------------------------------------------------------
 DEFAULT_CASTS = 20
 CAST_DRAG_DISTANCE = 150  # base pixels to drag downward (random-cast fallback)
-CAST_DRAG_HOLD_MS = 500  # hold time during drag (ms)
+CAST_DRAG_HOLD_MS = 300  # hold time during drag (ms)
 BITE_TIMEOUT_S = 12  # max seconds to wait before recasting
 BITE_POLL_INTERVAL_S = 0.10  # seconds between bite-check polls
 POST_CAST_DELAY_S = 1.0  # wait after cast before polling for bite

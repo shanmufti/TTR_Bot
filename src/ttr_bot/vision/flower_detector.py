@@ -10,13 +10,10 @@ of :class:`FlowerBlob` sorted nearest-first (lowest on screen = closest).
 
 from __future__ import annotations
 
-import os
 from typing import NamedTuple
 
 import cv2
 import numpy as np
-
-from ttr_bot.utils.logger import log
 
 
 class FlowerBlob(NamedTuple):
@@ -55,7 +52,9 @@ def scan_for_flowers(
 
     red = cv2.inRange(hsv, _RED_LO1, _RED_HI1) | cv2.inRange(hsv, _RED_LO2, _RED_HI2)
     green = cv2.inRange(hsv, _GREEN_LO, _GREEN_HI)
-    green_near = cv2.dilate(green, np.ones((_GREEN_DILATE_PX, _GREEN_DILATE_PX), np.uint8))
+    green_near = cv2.dilate(
+        green, np.ones((_GREEN_DILATE_PX, _GREEN_DILATE_PX), np.uint8)
+    )
 
     playfield = np.zeros((h, w), np.uint8)
     y0 = int(h * ui_margin_top)
@@ -145,22 +144,42 @@ def debug_annotate(frame: np.ndarray, direction: str, magnitude: float) -> np.nd
     cx0, cx1 = int(w * 0.40), int(w * 0.60)
     cy0, cy1 = int(h * 0.35), int(h * 0.85)
     cv2.rectangle(vis, (cx0, cy0), (cx1, cy1), (0, 0, 255), 2)
-    cv2.putText(vis, "EXCL", (cx0 + 4, cy0 + 20),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+    cv2.putText(
+        vis, "EXCL", (cx0 + 4, cy0 + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2
+    )
 
     blobs = scan_for_flowers(frame)
     for b in blobs:
-        cv2.rectangle(vis, (b.bbox_x, b.bbox_y),
-                      (b.bbox_x + b.bbox_w, b.bbox_y + b.bbox_h), (0, 255, 0), 2)
+        cv2.rectangle(
+            vis,
+            (b.bbox_x, b.bbox_y),
+            (b.bbox_x + b.bbox_w, b.bbox_y + b.bbox_h),
+            (0, 255, 0),
+            2,
+        )
         cv2.circle(vis, (b.cx, b.cy), 6, (0, 255, 255), -1)
-        cv2.putText(vis, str(b.area), (b.bbox_x, b.bbox_y - 4),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+        cv2.putText(
+            vis,
+            str(b.area),
+            (b.bbox_x, b.bbox_y - 4),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            (0, 255, 0),
+            1,
+        )
 
     mid_x = w // 2
-    label = f"{direction} ({magnitude:.2f})" if direction in ("left", "right") else direction
-    color = {"left": (255, 200, 0), "right": (255, 200, 0),
-             "forward": (0, 255, 0), "none": (0, 0, 255)}.get(direction, (255, 255, 255))
-    cv2.putText(vis, label, (mid_x - 80, 40),
-                cv2.FONT_HERSHEY_SIMPLEX, 1.0, color, 3)
+    label = (
+        f"{direction} ({magnitude:.2f})"
+        if direction in ("left", "right")
+        else direction
+    )
+    color = {
+        "left": (255, 200, 0),
+        "right": (255, 200, 0),
+        "forward": (0, 255, 0),
+        "none": (0, 0, 255),
+    }.get(direction, (255, 255, 255))
+    cv2.putText(vis, label, (mid_x - 80, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.0, color, 3)
 
     return vis

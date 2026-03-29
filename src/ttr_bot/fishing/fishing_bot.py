@@ -18,9 +18,10 @@ from ttr_bot.config import settings
 from ttr_bot.core import input_controller as inp
 from ttr_bot.core.screen_capture import capture_window
 from ttr_bot.core.window_manager import find_ttr_window, is_window_available, WindowInfo
+from ttr_bot.vision.color_matcher import build_water_mask, average_water_brightness
 from ttr_bot.vision.pond_detector import detect_pond, PondArea
 from ttr_bot.vision.fish_detector import find_best_fish
-from ttr_bot.vision.template_matcher import find_template, find_template_fast
+from ttr_bot.vision.template_matcher import find_template_fast
 from ttr_bot.utils.logger import log
 
 
@@ -88,68 +89,84 @@ class FishingBot:
 
     def _run(self) -> None:
         try:
-            from ttr_bot.core.cast_calibration import cast_calibration
-            if not cast_calibration.is_calibrated:
-                cast_calibration.load()
-            if not cast_calibration.is_calibrated:
-                self._finish("No cast calibration — run Calibrate Cast first")
-                return
-
-            if not is_window_available():
-                self._finish("TTR window not found")
-                return
-
-            inp.ensure_focused()
-            time.sleep(0.3)
-
-            win = find_ttr_window()
+            win = self._preflight()
             if win is None:
-                self._finish("TTR window not found")
                 return
 
-            self._status("Fishing started")
-
-            # Detect pond once — the toon doesn't move while fishing.
-            pond = self._detect_pond_once(win)
-            if pond is None:
+            pond_result = self._detect_pond_once(win)
+            if pond_result is None:
                 self._finish("No pond detected — is toon at dock?")
                 return
+            pond, avg_water_bright = pond_result
 
-            consecutive_skips = 0
-
-            while not self._stop_event.is_set():
-                if self.stats.casts >= self.config.max_casts:
-                    break
-
-                while self._paused and not self._stop_event.is_set():
-                    time.sleep(0.25)
-                if self._stop_event.is_set():
-                    break
-
-                result = self._one_cast(win, pond)
-
-                if result == "skipped":
-                    consecutive_skips += 1
-                    backoff = min(2.0 * consecutive_skips, 10.0)
-                    self._status(f"No target — waiting {backoff:.0f}s")
-                    time.sleep(backoff)
-                elif result == "no_beans":
-                    self._finish("Out of jellybeans")
-                    return
-                elif result == "bucket_full":
-                    self._finish("Bucket is full")
-                    return
-                else:
-                    consecutive_skips = 0
-
-            reason = "User stopped" if self._stop_event.is_set() else "Completed"
-            self._finish(reason)
+            self._cast_loop(win, pond, avg_water_bright)
 
         except Exception as exc:
             log.exception("Fishing loop crashed")
             self._finish(f"Error: {exc}")
 
-    def _one_cast(self, win: WindowInfo, pond: PondArea) -> str:
+    def _preflight(self) -> WindowInfo | None:
+        """Validate calibration and window before the cast loop starts.
+
+        Returns the WindowInfo on success, or None after calling _finish.
+        """
+        from ttr_bot.core.cast_calibration import cast_calibration
+        if not cast_calibration.is_calibrated:
+            cast_calibration.load()
+        if not cast_calibration.is_calibrated:
+            self._finish("No cast calibration — run Calibrate Cast first")
+            return None
+
+        if not is_window_available():
+            self._finish("TTR window not found")
+            return None
+
+        inp.ensure_focused()
+        time.sleep(0.3)
+
+        win = find_ttr_window()
+        if win is None:
+            self._finish("TTR window not found")
+            return None
+
+        self._status("Fishing started")
+        return win
+
+    def _wait_if_paused(self) -> None:
+        """Block while the bot is paused."""
+        while self._paused and not self._stop_event.is_set():
+            time.sleep(0.25)
+
+    def _cast_loop(self, win: WindowInfo, pond: PondArea, avg_water_bright: int) -> None:
+        """Run the main cast-check-repeat loop until done or stopped."""
+        consecutive_skips = 0
+
+        while not self._stop_event.is_set():
+            if self.stats.casts >= self.config.max_casts:
+                break
+
+            self._wait_if_paused()
+            if self._stop_event.is_set():
+                break
+
+            result = self._one_cast(win, pond, avg_water_bright)
+
+            if result == "skipped":
+                consecutive_skips += 1
+                backoff = min(2.0 * consecutive_skips, 10.0)
+                self._status(f"No target — waiting {backoff:.0f}s")
+                time.sleep(backoff)
+            elif result in ("no_beans", "bucket_full"):
+                msg = "Out of jellybeans" if result == "no_beans" else "Bucket is full"
+                self._finish(msg)
+                return
+            else:
+                consecutive_skips = 0
+
+        reason = "User stopped" if self._stop_event.is_set() else "Completed"
+        self._finish(reason)
+
+    def _one_cast(self, win: WindowInfo, pond: PondArea, avg_water_bright: int) -> str:
         """Execute a single cast cycle.
 
         Returns:
@@ -171,7 +188,7 @@ class FishingBot:
         fresh = capture_window(win)
         if fresh is not None:
             frame = fresh
-        shadow = find_best_fish(frame, pond)
+        shadow = find_best_fish(frame, pond, avg_water_bright)
 
         if shadow is None:
             self.stats.skipped += 1
@@ -213,8 +230,13 @@ class FishingBot:
     # Pond detection (once per session)
     # ------------------------------------------------------------------
 
-    def _detect_pond_once(self, win: WindowInfo) -> PondArea | None:
-        """Capture a frame and detect the pond. Returns None on failure."""
+    def _detect_pond_once(self, win: WindowInfo) -> tuple[PondArea, int] | None:
+        """Capture a frame and detect the pond.
+
+        Returns ``(pond, avg_water_bright)`` or *None* on failure.
+        The brightness is cached for the session and passed to shadow/bubble
+        detection so it doesn't need to be recomputed every cast.
+        """
         for _ in range(5):
             frame = capture_window(win)
             if frame is None:
@@ -222,11 +244,14 @@ class FishingBot:
                 continue
             pond = detect_pond(frame)
             if not pond.empty:
+                crop = frame[pond.y : pond.y + pond.height, pond.x : pond.x + pond.width]
+                water_mask = build_water_mask(crop)
+                avg_bright = average_water_brightness(crop, water_mask)
                 log.info(
-                    "Pond locked: %dx%d at (%d,%d)",
-                    pond.width, pond.height, pond.x, pond.y,
+                    "Pond locked: %dx%d at (%d,%d)  water_brightness=%d",
+                    pond.width, pond.height, pond.x, pond.y, avg_bright,
                 )
-                return pond
+                return pond, avg_bright
             time.sleep(0.5)
         return None
 
