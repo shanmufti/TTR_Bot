@@ -112,6 +112,7 @@ TEMPLATE_NAMES = {
     "blue_plant_button": "Blue_Plant_Button.png",
     "watering_can_button": "Watering_Can_Button.png",
     "pick_flower_button": "Pick_Flower_Button.png",
+    "remove_button": "Remove_Button.png",
     # Golf (optional — add PNGs under templates/)
     "golf_pencil_button": "Golf_Pencil_Button.png",
     "golf_close_button": "Golf_Close_Button.png",
@@ -153,43 +154,16 @@ GARDEN_WATERS_AFTER_PLANT = 1  # times to water after planting
 GARDEN_FIND_TIMEOUT_S = 10.0  # max seconds to poll for a template
 
 # ---------------------------------------------------------------------------
-# Gardening – demo recording
+# Gardening – sweep navigation
 # ---------------------------------------------------------------------------
-DEMO_FRAME_INTERVAL_MS = 200  # capture every 200ms (~5 FPS)
-DEMO_SAVE_DIR = os.path.join(GARDENING_ROUTINES_DIR, "demos")
-
-# ---------------------------------------------------------------------------
-# Gardening – SIFT localization
-# ---------------------------------------------------------------------------
-SIFT_NFEATURES = 500  # max SIFT keypoints per frame (speed vs accuracy)
-SIFT_MATCH_RATIO = 0.7  # Lowe's ratio test threshold
-LOCALIZATION_MIN_MATCHES = 10  # minimum good matches to accept a localization
-
-# ---------------------------------------------------------------------------
-# Gardening – navigation (demo replay warm-start)
-# ---------------------------------------------------------------------------
-NAV_REPLAY_DRIFT_THRESHOLD = 0.4  # localization conf below this = drifting
-NAV_REPLAY_CLOSE_RANGE = 0.7  # conf above this near target = arrived
-
-# ---------------------------------------------------------------------------
-# Gardening – navigation (SIFT correction)
-# ---------------------------------------------------------------------------
-NAV_MAX_WALK_TIME_PER_BED = 30  # seconds before giving up on a bed
-NAV_KEY_BURST_MS = 200  # duration of each key press burst
-NAV_RECHECK_INTERVAL_MS = 250  # re-localize every N ms
-NAV_HEADING_SMOOTHING = 4  # rolling average window for heading
-
-# ---------------------------------------------------------------------------
-# Gardening – stuck detection
-# ---------------------------------------------------------------------------
-NAV_STUCK_THRESHOLD = 500  # min frame diff sum to consider "moving"
-NAV_STUCK_TIMEOUT_S = 1.5  # seconds of no movement before stuck
-NAV_MAX_RECOVERY_ATTEMPTS = 3  # per bed, then skip
-
-# ---------------------------------------------------------------------------
-# Gardening – camera
-# ---------------------------------------------------------------------------
-CAMERA_TAB_COUNT = 2  # Tab presses to reach zoomed-out chase cam
+SWEEP_CHECK_INTERVAL_S = 2.0  # seconds of walking between bed-detection polls
+SWEEP_TARGET_BEDS = 10  # expected flower beds per estate garden
+SWEEP_MAX_LAPS = 3  # perimeter laps before giving up
+SWEEP_POST_INTERACT_WALK_S = 2.0  # walk-away time after interacting with a bed
+SWEEP_TURN_RATE_DEG_S = 36.0  # estimated character turn rate (degrees/second)
+SWEEP_WALK_SPEED = 1.0  # arbitrary map-units per second (for relative mapping)
+SWEEP_MAP_JSON = os.path.join(GARDENING_ROUTINES_DIR, "sweep_map.json")
+SWEEP_MAP_IMAGE = os.path.join(DATA_DIR, "_debug", "garden_map.png")
 
 # ---------------------------------------------------------------------------
 # Golf (Custom Golf Actions JSON — same format as Toontown-Rewritten-Bot)

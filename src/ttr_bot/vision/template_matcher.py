@@ -298,6 +298,34 @@ def _nms(matches: list[MatchResult], tw: int, th: int) -> list[MatchResult]:
     return kept
 
 
+def find_template_fast(
+    frame_bgr: np.ndarray,
+    template_name: str,
+    threshold: float = settings.TEMPLATE_MATCH_THRESHOLD,
+) -> MatchResult | None:
+    """Like find_template but only checks the locked scale (no fallbacks).
+
+    ~5x faster — suitable for repeated polling during walk-and-scan.
+    """
+    tmpl = _get_scaled_template(template_name)
+    if tmpl is None or _global_scale is None:
+        return None
+
+    th, tw = tmpl.shape[:2]
+    fh, fw = frame_bgr.shape[:2]
+    if tw > fw or th > fh:
+        return None
+
+    result = cv2.matchTemplate(frame_bgr, tmpl, cv2.TM_CCOEFF_NORMED)
+    _, max_val, _, max_loc = cv2.minMaxLoc(result)
+
+    if max_val >= threshold:
+        cx = max_loc[0] + tw // 2
+        cy = max_loc[1] + th // 2
+        return MatchResult(cx, cy, float(max_val), tw, th)
+    return None
+
+
 def is_element_visible(frame_bgr: np.ndarray, template_name: str) -> bool:
     """Quick check: is the given UI element currently visible?"""
     return find_template(frame_bgr, template_name) is not None
