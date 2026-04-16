@@ -15,7 +15,20 @@ pyautogui.PAUSE = settings.PYAUTOGUI_PAUSE
 pyautogui.FAILSAFE = settings.PYAUTOGUI_FAILSAFE
 
 
-_RETINA_SCALE = 2
+def _detect_retina_scale() -> int:
+    """Return the macOS backing scale factor (2 on Retina, 1 otherwise)."""
+    try:
+        from AppKit import NSScreen
+
+        main = NSScreen.mainScreen()
+        if main is not None:
+            return int(main.backingScaleFactor())
+    except Exception:
+        pass
+    return settings.RETINA_SCALE
+
+
+_RETINA_SCALE = _detect_retina_scale()
 _DRAG_HOLD_S = settings.CAST_DRAG_HOLD_MS / 1000.0
 
 

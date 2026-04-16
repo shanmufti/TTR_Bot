@@ -17,6 +17,7 @@ from dataclasses import dataclass
 import numpy as np
 import pyautogui
 
+from ttr_bot.config import settings
 from ttr_bot.core.cast_calibration import detect_bobber
 from ttr_bot.core.cast_params import CastParams
 from ttr_bot.core.screen_capture import capture_window
@@ -28,7 +29,7 @@ from ttr_bot.vision.fish_detector import FishCandidate, detect_fish_shadows
 from ttr_bot.vision.pond_detector import PondArea, detect_pond
 from ttr_bot.vision.template_matcher import find_template
 
-_RETINA_SCALE = 2
+_RETINA_SCALE = settings.RETINA_SCALE
 
 
 @dataclass
