@@ -26,9 +26,9 @@ class FishCandidate(NamedTuple):
     has_bubbles: bool
 
 
-SHADOW_MIN_AREA = 50
-SHADOW_MAX_AREA = 15000
-_SHADOW_MAX_DIM = 200
+SHADOW_MIN_AREA = settings.SHADOW_MIN_AREA
+SHADOW_MAX_AREA = settings.SHADOW_MAX_AREA
+_SHADOW_MAX_DIM = settings.SHADOW_MAX_DIM
 
 _RING_OFFSETS = np.array(
     [
@@ -187,10 +187,8 @@ def detect_fish_shadows(
     return candidates
 
 
-_BUBBLE_SCORE_BOOST = 0.5
-
-
-_NEAR_THRESHOLD = 60
+_BUBBLE_SCORE_BOOST = settings.FISH_BUBBLE_SCORE_BOOST
+_NEAR_THRESHOLD = settings.FISH_NEAR_THRESHOLD
 
 
 def rank_fish(

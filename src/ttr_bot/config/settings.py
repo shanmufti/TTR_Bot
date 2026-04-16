@@ -62,6 +62,11 @@ SHADOW_WATER_MIN_RATIO = 0.35  # min fraction of surrounding ring that is water
 # Shadow color: darker than water, still has blue/green tint
 SHADOW_BRIGHTNESS_MAX = 120  # max average brightness for shadow pixel
 SHADOW_BLUE_GREEN_BIAS = 15  # (G+B)/2 must exceed R by at least this
+SHADOW_MIN_AREA = 50  # blob area range for fish candidates
+SHADOW_MAX_AREA = 15000
+SHADOW_MAX_DIM = 200  # max blob width or height (px)
+FISH_NEAR_THRESHOLD = 60  # px: skip fish this close to last-miss target
+FISH_BUBBLE_SCORE_BOOST = 0.5  # ranking bonus for shadows with bubbles
 
 # ---------------------------------------------------------------------------
 # Vision – bubble detection
@@ -115,6 +120,7 @@ TEMPLATE_NAMES = {
 # ---------------------------------------------------------------------------
 PYAUTOGUI_PAUSE = 0.05  # global pyautogui pause between actions
 PYAUTOGUI_FAILSAFE = True  # move mouse to corner to abort
+RETINA_SCALE = 2  # macOS HiDPI factor (captures are 2x screen coords)
 
 # ---------------------------------------------------------------------------
 # Gardening
