@@ -157,6 +157,17 @@ GOLF_BETWEEN_HOLES_DELAY_S = 3.0
 _CONFIG_PATH = os.path.join(DATA_DIR, "config.toml")
 
 
+def _collect_overrides(user_cfg: dict) -> list[tuple[str, object]]:
+    """Return a flat list of ``(UPPER_KEY, value)`` pairs from the TOML dict."""
+    pairs: list[tuple[str, object]] = []
+    for key, value in user_cfg.items():
+        if isinstance(value, dict):
+            pairs.extend((k.upper(), v) for k, v in value.items())
+        else:
+            pairs.append((key.upper(), value))
+    return pairs
+
+
 def _apply_toml_overrides() -> None:
     """Patch module globals from ``data/config.toml`` if it exists."""
     if not os.path.isfile(_CONFIG_PATH):
@@ -169,22 +180,11 @@ def _apply_toml_overrides() -> None:
 
     this_module = globals()
     applied = 0
-    for section in user_cfg.values() if isinstance(user_cfg, dict) else []:
-        if not isinstance(section, dict):
+    for upper_key, value in _collect_overrides(user_cfg):
+        if upper_key not in this_module:
             continue
-        for key, value in section.items():
-            upper = key.upper()
-            if upper in this_module:
-                this_module[upper] = type(this_module[upper])(value)
-                applied += 1
-
-    # Also handle flat top-level keys
-    for key, value in user_cfg.items():
-        if not isinstance(value, dict):
-            upper = key.upper()
-            if upper in this_module:
-                this_module[upper] = type(this_module[upper])(value)
-                applied += 1
+        this_module[upper_key] = type(this_module[upper_key])(value)
+        applied += 1
 
     if applied:
         import logging

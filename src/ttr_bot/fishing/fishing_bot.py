@@ -12,9 +12,6 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
-import cv2
-import numpy as np
-
 from ttr_bot.config import settings
 from ttr_bot.core import input_controller as inp
 from ttr_bot.core.screen_capture import capture_window
@@ -22,7 +19,7 @@ from ttr_bot.core.window_manager import WindowInfo, find_ttr_window, is_window_a
 from ttr_bot.utils import debug_frames as dbg
 from ttr_bot.utils.logger import log
 from ttr_bot.vision.color_matcher import average_water_brightness, build_water_mask
-from ttr_bot.vision.fish_detector import detect_fish_shadows, find_best_fish
+from ttr_bot.vision.fish_detector import detect_fish_shadows, find_best_fish, has_catch_popup
 from ttr_bot.vision.pond_detector import PondArea, detect_pond
 from ttr_bot.vision.template_matcher import find_template
 
@@ -415,25 +412,6 @@ class FishingBot:
     # Bite detection
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def _has_catch_popup(frame: np.ndarray) -> bool:
-        """Detect the fish-caught popup by its warm-yellow card background.
-
-        Checks the center-top region for the popup's distinctive
-        cream/yellow pixels (HSV H=25-35, S=40-90, V>220).
-        """
-        h, w = frame.shape[:2]
-        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-        roi = hsv[h // 6 : h // 2, w // 4 : 3 * w // 4]
-        card = (
-            (roi[:, :, 0] >= 25)
-            & (roi[:, :, 0] <= 35)
-            & (roi[:, :, 1] >= 40)
-            & (roi[:, :, 1] <= 90)
-            & (roi[:, :, 2] >= 220)
-        )
-        return bool(np.sum(card) / card.size > 0.05)
-
     def _wait_for_bite(self, win: WindowInfo) -> str:
         """Poll until a popup appears or timeout.
 
@@ -457,7 +435,7 @@ class FishingBot:
                 time.sleep(0.05)
                 continue
 
-            if self._has_catch_popup(frame):
+            if has_catch_popup(frame):
                 return "caught"
 
             # Template checks are ~3× more expensive than HSV; skip

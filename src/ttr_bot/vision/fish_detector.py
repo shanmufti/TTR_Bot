@@ -252,3 +252,22 @@ def find_best_fish(
     best = ranked[0]
     log.info("find_best_fish: all near avoid — falling back to (%d,%d)", best[0], best[1])
     return (best[0], best[1])
+
+
+def has_catch_popup(frame: np.ndarray) -> bool:
+    """Detect the fish-caught popup by its warm-yellow card background.
+
+    Checks the center-top region for the popup's distinctive
+    cream/yellow pixels (HSV H=25-35, S=40-90, V>220).
+    """
+    h, w = frame.shape[:2]
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    roi = hsv[h // 6 : h // 2, w // 4 : 3 * w // 4]
+    card = (
+        (roi[:, :, 0] >= 25)
+        & (roi[:, :, 0] <= 35)
+        & (roi[:, :, 1] >= 40)
+        & (roi[:, :, 1] <= 90)
+        & (roi[:, :, 2] >= 220)
+    )
+    return bool(np.sum(card) / card.size > 0.05)
