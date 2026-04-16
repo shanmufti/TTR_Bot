@@ -8,9 +8,9 @@ TTR movement model (fixed camera behind character):
 Navigation approach:
 
 1.  Scan the screen for visible flowers (red-near-green colour blobs).
-2.  Steer toward them: if flowers are to the left, turn left; right → right.
+2.  Steer toward them: if flowers are to the left, turn left; right -> right.
 3.  Walk forward and poll for gardening UI buttons (Pick / Plant / Water).
-4.  When buttons appear → interact with the bed.
+4.  When buttons appear -> interact with the bed.
 5.  After interacting, walk away and scan again.
 6.  If no flowers are visible, rotate slowly until some come into view.
 """
@@ -27,13 +27,17 @@ import pyautogui
 
 from ttr_bot.config import settings
 from ttr_bot.core import input_controller as inp
-from ttr_bot.core.screen_capture import capture_window, grab_frame
-from ttr_bot.core.window_manager import find_ttr_window
-from ttr_bot.gardening.bed_ui import BED_BUTTON_NAMES, classify_bed_state, detect_bed_button
+from ttr_bot.core.screen_capture import grab_frame
+from ttr_bot.gardening.bed_ui import detect_bed_button
 from ttr_bot.gardening.gardening_bot import GardenBot
+from ttr_bot.gardening.sweep_interaction import (
+    BedActionContext,
+    ScanCallbacks,
+    interact_at_bed,
+    walk_and_scan,
+)
 from ttr_bot.utils import debug_frames as dbg
 from ttr_bot.utils.logger import log
-from ttr_bot.vision import template_matcher as tm
 from ttr_bot.vision.flower_detector import debug_annotate, steering_hint
 
 _DEBUG_DIR = os.path.join(settings.DATA_DIR, "_debug", "sweep")
@@ -41,7 +45,7 @@ _DEBUG_DIR = os.path.join(settings.DATA_DIR, "_debug", "sweep")
 _ARROW_KEYS = ("up", "down", "left", "right")
 
 
-@dataclass
+@dataclass(slots=True)
 class SweepResult:
     """Summary returned after one full garden sweep pass."""
 
@@ -115,6 +119,27 @@ class GardenSweeper:
     # Visual discovery loop
     # ------------------------------------------------------------------
 
+    def _make_bed_ctx(
+        self, flower_name: str, bean_sequence: str, result: SweepResult,
+    ) -> BedActionContext:
+        return BedActionContext(
+            flower_name=flower_name,
+            bean_sequence=bean_sequence,
+            result=result,
+            bot=self._bot,
+            status_fn=self._status,
+            debug_save_fn=self._debug_save,
+        )
+
+    def _make_scan_cb(self) -> ScanCallbacks:
+        return ScanCallbacks(
+            detect_bed_fn=self._detect_bed,
+            key_burst_fn=self._key_burst,
+            status_fn=self._status,
+            grab_frame_fn=self._grab_frame,
+            debug_save_fn=self._debug_save,
+        )
+
     def _discover(
         self,
         max_laps: int,
@@ -123,10 +148,13 @@ class GardenSweeper:
         result: SweepResult,
         target_beds: int,
     ) -> None:
+        bed_ctx = self._make_bed_ctx(flower_name, bean_sequence, result)
+        scan_cb = self._make_scan_cb()
+
         bed_btn = self._detect_bed()
         if bed_btn is not None:
             self._status("Already at a bed — interacting")
-            self._interact_at_bed(flower_name, bean_sequence, result)
+            interact_at_bed(bed_ctx)
             self._walk_away()
 
         self._status("Visual scan-and-navigate")
@@ -146,37 +174,37 @@ class GardenSweeper:
             if frame is None:
                 break
 
-            direction, magnitude = steering_hint(frame)
-            self._debug_save(debug_annotate(frame, direction, magnitude), f"steer_{direction}")
+            hint = steering_hint(frame)
+            self._debug_save(
+                debug_annotate(frame, hint.direction, hint.magnitude), f"steer_{hint.direction}"
+            )
 
-            if direction == "none":
-                idle_count = self._handle_no_flowers(
-                    idle_count,
-                    flower_name,
-                    bean_sequence,
-                    result,
-                )
+            if hint.direction == "none":
+                idle_count = self._handle_no_flowers(idle_count, bed_ctx, scan_cb)
                 continue
 
             idle_count = 0
 
-            if direction in ("left", "right"):
-                turn_dur = settings.SWEEP_TURN_BURST_S * magnitude
-                self._status(f"Flowers {direction} ({magnitude:.2f}) — turning {turn_dur:.2f}s")
-                self._key_burst([direction], turn_dur)
+            if hint.direction in ("left", "right"):
+                turn_dur = settings.SWEEP_TURN_BURST_S * hint.magnitude
+                self._status(
+                    f"Flowers {hint.direction} ({hint.magnitude:.2f}) — turning {turn_dur:.2f}s"
+                )
+                self._key_burst([hint.direction], turn_dur)
 
             self._status(f"Walking toward flowers (visited {result.beds_visited}/{target_beds})")
-            outcome = self._walk_and_scan(["up"], settings.SWEEP_WALK_BURST_S)
+            outcome = walk_and_scan(
+                ["up"], settings.SWEEP_WALK_BURST_S, self._stop_event, scan_cb,
+            )
             if outcome == "bed_found":
-                self._interact_at_bed(flower_name, bean_sequence, result)
+                interact_at_bed(bed_ctx)
                 self._walk_away()
 
     def _handle_no_flowers(
         self,
         idle_count: int,
-        flower_name: str,
-        bean_sequence: str,
-        result: SweepResult,
+        bed_ctx: BedActionContext,
+        scan_cb: ScanCallbacks,
     ) -> int:
         """React when no flowers are visible. Returns the updated idle counter."""
         idle_count += 1
@@ -185,9 +213,11 @@ class GardenSweeper:
             return 0
         if idle_count <= settings.SWEEP_WALK_BEFORE_ROTATE:
             self._status(f"No flowers — walking forward to search ({idle_count})")
-            outcome = self._walk_and_scan(["up"], settings.SWEEP_WALK_BURST_S)
+            outcome = walk_and_scan(
+                ["up"], settings.SWEEP_WALK_BURST_S, self._stop_event, scan_cb,
+            )
             if outcome == "bed_found":
-                self._interact_at_bed(flower_name, bean_sequence, result)
+                interact_at_bed(bed_ctx)
                 self._walk_away()
         else:
             self._status("No flowers — rotating to scan")
@@ -195,136 +225,20 @@ class GardenSweeper:
         return idle_count
 
     # ------------------------------------------------------------------
-    # Walk-and-scan
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def _grab_frame():
-        return grab_frame()
-
-    def _walk_and_scan(
-        self,
-        keys: list[str],
-        leg_duration: float,
-    ) -> str:
-        """Walk for *leg_duration*, polling for beds.
-
-        Returns ``"bed_found"``, ``"leg_complete"``, or ``"stopped"``.
-        """
-        check_interval = settings.SWEEP_CHECK_INTERVAL_S
-        elapsed = 0.0
-
-        while elapsed < leg_duration:
-            if self._stop_event.is_set():
-                return "stopped"
-
-            burst = min(check_interval, leg_duration - elapsed)
-            self._key_burst(keys, burst)
-            elapsed += burst
-
-            bed_btn = self._detect_bed()
-            if bed_btn is not None:
-                detect_frame = self._grab_frame()
-                if detect_frame is not None:
-                    self._debug_save(detect_frame, f"bed_detect_{bed_btn}")
-                time.sleep(0.3)
-                bed_btn = self._detect_bed()
-                if bed_btn is not None:
-                    self._status(f"Bed detected via {bed_btn}")
-                    return "bed_found"
-                self._key_burst(["down"], 0.6)
-                time.sleep(0.3)
-                bed_btn = self._detect_bed()
-                if bed_btn is not None:
-                    self._status("Bed confirmed after backtrack")
-                    return "bed_found"
-
-        return "leg_complete"
-
-    # ------------------------------------------------------------------
-    # Bed detection & interaction
+    # Bed detection
     # ------------------------------------------------------------------
 
     def _detect_bed(self) -> str | None:
         frame = grab_frame()
         return detect_bed_button(frame) if frame is not None else None
 
-    def _interact_at_bed(
-        self,
-        flower_name: str,
-        bean_sequence: str,
-        result: SweepResult,
-    ) -> None:
-        result.beds_visited += 1
-        bed_num = result.beds_visited
-        self._status(f"Bed #{bed_num}: checking state…")
-
-        win = find_ttr_window()
-        if win is None:
-            return
-        frame = capture_window(win)
-        if frame is None:
-            return
-
-        state = classify_bed_state(frame)
-
-        debug_frame = frame.copy()
-        cv2.putText(
-            debug_frame,
-            f"STATE: {state}",
-            (20, 40),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            1.2,
-            (0, 255, 255),
-            3,
-        )
-        y_off = 80
-        for btn_name in BED_BUTTON_NAMES:
-            m = tm.find_template(frame, btn_name)
-            label = f"{btn_name}: {m.confidence:.3f} @({m.x},{m.y})" if m else f"{btn_name}: ---"
-            cv2.putText(
-                debug_frame, label, (20, y_off), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2
-            )
-            y_off += 30
-        self._debug_save(debug_frame, f"bed{bed_num}_state_{state}")
-        self._execute_bed_action(state, bed_num, flower_name, bean_sequence, result)
-        time.sleep(0.5)
-
-    def _execute_bed_action(
-        self,
-        state: str,
-        bed_num: int,
-        flower_name: str,
-        bean_sequence: str,
-        result: SweepResult,
-    ) -> None:
-        if state == "pick":
-            self._do_pick_and_plant(bed_num, flower_name, bean_sequence, result)
-        elif state == "plant":
-            self._status(f"Bed #{bed_num}: planting {flower_name}")
-            if self._bot.plant_flower(flower_name, bean_sequence):
-                result.beds_planted += 1
-        else:
-            self._status(f"Bed #{bed_num}: state={state} — skipping")
-
-    def _do_pick_and_plant(
-        self,
-        bed_num: int,
-        flower_name: str,
-        bean_sequence: str,
-        result: SweepResult,
-    ) -> None:
-        self._status(f"Bed #{bed_num}: picking grown flower")
-        if self._bot.pick_flower():
-            result.beds_picked += 1
-            time.sleep(1.0)
-            self._status(f"Bed #{bed_num}: planting {flower_name}")
-            if self._bot.plant_flower_no_pick(flower_name, bean_sequence):
-                result.beds_planted += 1
-
     # ------------------------------------------------------------------
     # Movement helpers
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _grab_frame():
+        return grab_frame()
 
     def _recover_from_stuck(self) -> None:
         """Walk backward and turn to escape camera-clipping / stuck spots."""

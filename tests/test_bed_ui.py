@@ -6,6 +6,7 @@ import numpy as np
 
 from ttr_bot.gardening.bed_ui import (
     BED_BUTTON_NAMES,
+    BedState,
     classify_bed_state,
     detect_bed_button,
 )
@@ -49,7 +50,7 @@ class TestClassifyBedState:
             return None
 
         mock_find.side_effect = side_effect
-        assert classify_bed_state(_DUMMY_FRAME) == "plant"
+        assert classify_bed_state(_DUMMY_FRAME) == BedState.PLANT
 
     @patch("ttr_bot.gardening.bed_ui.tm.find_template")
     def test_pick_button_returns_pick(self, mock_find):
@@ -59,7 +60,7 @@ class TestClassifyBedState:
             return None
 
         mock_find.side_effect = side_effect
-        assert classify_bed_state(_DUMMY_FRAME) == "pick"
+        assert classify_bed_state(_DUMMY_FRAME) == BedState.PICK
 
     @patch("ttr_bot.gardening.bed_ui.tm.find_template")
     def test_remove_button_returns_pick(self, mock_find):
@@ -69,8 +70,8 @@ class TestClassifyBedState:
             return None
 
         mock_find.side_effect = side_effect
-        assert classify_bed_state(_DUMMY_FRAME) == "pick"
+        assert classify_bed_state(_DUMMY_FRAME) == BedState.PICK
 
     @patch("ttr_bot.gardening.bed_ui.tm.find_template", return_value=None)
     def test_no_match_returns_unknown(self, mock_find):
-        assert classify_bed_state(_DUMMY_FRAME) == "unknown"
+        assert classify_bed_state(_DUMMY_FRAME) == BedState.UNKNOWN

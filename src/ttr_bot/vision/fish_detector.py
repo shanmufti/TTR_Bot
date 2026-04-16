@@ -5,7 +5,7 @@ target to cast at.
 """
 
 import math
-from typing import NamedTuple
+from dataclasses import dataclass
 
 import cv2
 import numpy as np
@@ -16,7 +16,8 @@ from ttr_bot.vision.color_matcher import build_water_mask
 from ttr_bot.vision.pond_detector import PondArea
 
 
-class FishCandidate(NamedTuple):
+@dataclass(frozen=True, slots=True)
+class FishCandidate:
     """A detected fish shadow with its position, size, and ranking score."""
 
     cx: int
@@ -81,7 +82,8 @@ def _check_blob_geometry(
     return area, bw, bh, aspect, fill
 
 
-class _BlobContext(NamedTuple):
+@dataclass(frozen=True, slots=True)
+class _BlobContext:
     """Constant context shared across all blob filter calls in one frame."""
 
     stats: np.ndarray

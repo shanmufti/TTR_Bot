@@ -161,7 +161,7 @@ class GardeningTab:
     def _wire_callbacks(self) -> None:
         self._bot.on_status_update = self._on_bot_status_thread
         self._bot.on_stats_update = self._on_bot_stats_thread
-        self._bot.on_gardening_ended = self._on_bot_ended_thread
+        self._bot.on_ended = self._on_bot_ended_thread
 
         self._routine_runner.on_status_update = self._on_bot_status_thread
         self._routine_runner.on_progress = self._on_routine_progress_thread

@@ -1,14 +1,14 @@
 """Golfing tab — custom JSON replay + auto round (ported from Toontown-Rewritten-Bot)."""
 
 import os
-import threading
 import tkinter as tk
 from collections.abc import Callable
 from tkinter import ttk
 
-from ttr_bot.golf.action_player import load_actions, shot_summary
-from ttr_bot.golf.detector import list_action_stems, path_for_stem
+from ttr_bot.golf.action_files import list_action_stems, path_for_stem
 from ttr_bot.golf.golf_bot import GolfBot
+from ttr_bot.golf.shot_summary import load_actions, shot_summary
+from ttr_bot.ui.golf_course_dialog import pick_course_blocking
 from ttr_bot.ui.theme import ACCENT, BG, ENTRY_BG, FG
 from ttr_bot.utils.logger import log
 
@@ -168,7 +168,7 @@ class GolfingTab:
 
     def _wire_callbacks(self) -> None:
         self._bot.on_status_update = self._on_status_thread
-        self._bot.on_golf_ended = self._on_ended_thread
+        self._bot.on_ended = self._on_ended_thread
 
     def _on_status_thread(self, msg: str) -> None:
         self._root.after(0, lambda: self._status_var.set(msg))
@@ -243,55 +243,8 @@ class GolfingTab:
         self._run_custom_btn.config(state="disabled")
         self._auto_btn.config(state="disabled")
         self._stop_btn.config(state="normal")
-        self._bot.on_need_manual_course = self._pick_course_blocking
+        self._bot.on_need_manual_course = lambda opts: pick_course_blocking(self._root, opts)
         self._bot.start_auto_round(holes=self._holes_var.get())
-
-    def _pick_course_blocking(self, options: list[str]) -> str | None:
-        """Called from golf worker thread — blocks until user picks or cancels."""
-        result: list[str | None] = [None]
-        ready = threading.Event()
-
-        def show_dialog() -> None:
-            top = tk.Toplevel(self._root)
-            top.title("Select golf course")
-            top.configure(bg=BG)
-            top.transient(self._root)
-            top.grab_set()
-
-            tk.Label(
-                top,
-                text="Could not read course from screen.\nPick the JSON to use for this hole:",
-                fg=FG,
-                bg=BG,
-                justify="left",
-            ).pack(padx=12, pady=8)
-
-            var = tk.StringVar(value=options[0] if options else "")
-            combo = ttk.Combobox(top, textvariable=var, values=options, width=40, state="readonly")
-            combo.pack(padx=12, pady=4)
-
-            def ok() -> None:
-                result[0] = var.get().strip() or None
-                ready.set()
-                top.destroy()
-
-            def cancel() -> None:
-                result[0] = None
-                ready.set()
-                top.destroy()
-
-            bf = tk.Frame(top, bg=BG)
-            bf.pack(pady=8)
-            tk.Button(bf, text="Use this course", command=ok, highlightbackground="#1a8f3c").pack(
-                side="left", padx=4
-            )
-            tk.Button(bf, text="Skip", command=cancel, highlightbackground=ACCENT).pack(
-                side="left", padx=4
-            )
-
-        self._root.after(0, show_dialog)
-        ready.wait(timeout=300.0)
-        return result[0]
 
     def _on_stop(self) -> None:
         self._bot.stop()

@@ -8,13 +8,14 @@ The main entry point is :func:`scan_for_flowers` which returns a list
 of :class:`FlowerBlob` sorted nearest-first (lowest on screen = closest).
 """
 
-from typing import NamedTuple
+from dataclasses import dataclass
 
 import cv2
 import numpy as np
 
 
-class FlowerBlob(NamedTuple):
+@dataclass(frozen=True, slots=True)
+class FlowerBlob:
     """A detected flower location with bounding-box data."""
 
     cx: int
@@ -24,6 +25,14 @@ class FlowerBlob(NamedTuple):
     bbox_y: int
     bbox_w: int
     bbox_h: int
+
+
+@dataclass(frozen=True, slots=True)
+class SteeringHint:
+    """Navigation hint derived from visible flowers."""
+
+    direction: str
+    magnitude: float
 
 
 # HSV ranges for red flower petals (wraps around 0/180)
@@ -97,18 +106,14 @@ def scan_for_flowers(
 def steering_hint(
     frame: np.ndarray,
     dead_zone: float = 0.15,
-) -> tuple[str, float]:
+) -> SteeringHint:
     """Return a steering hint based on visible flowers.
-
-    Returns ``("left", magnitude)``, ``("right", magnitude)``,
-    ``("forward", 0)`` if flowers are centered, or
-    ``("none", 0)`` if no flowers are visible.
 
     *magnitude* is 0-1, representing how far off-center the flowers are.
     """
     blobs = scan_for_flowers(frame)
     if not blobs:
-        return ("none", 0.0)
+        return SteeringHint("none", 0.0)
 
     _h, w = frame.shape[:2]
     mid_x = w / 2.0
@@ -124,10 +129,10 @@ def steering_hint(
     offset = (avg_x - mid_x) / mid_x  # -1 (far left) to +1 (far right)
 
     if abs(offset) < dead_zone:
-        return ("forward", 0.0)
+        return SteeringHint("forward", 0.0)
     if offset < 0:
-        return ("left", min(abs(offset), 1.0))
-    return ("right", min(offset, 1.0))
+        return SteeringHint("left", min(abs(offset), 1.0))
+    return SteeringHint("right", min(offset, 1.0))
 
 
 def debug_annotate(frame: np.ndarray, direction: str, magnitude: float) -> np.ndarray:

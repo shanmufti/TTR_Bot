@@ -1,41 +1,15 @@
 """Tkinter GUI for the TTR Bot (Fishing, Gardening, Golf)."""
 
-import contextlib
 import logging
 import threading
 import tkinter as tk
 from tkinter import scrolledtext, ttk
 
-from ttr_bot.core.screen_capture import capture_window
-from ttr_bot.core.window_manager import (
-    find_ttr_window,
-    is_window_available,
-    set_calibrated_bounds,
-)
+from ttr_bot.core.calibration_service import CalibrationService
+from ttr_bot.core.window_manager import is_window_available
+from ttr_bot.ui.log_handler import TkLogHandler
 from ttr_bot.ui.theme import ACCENT, BG, ENTRY_BG, FG
 from ttr_bot.utils.logger import log
-
-
-class _TkLogHandler(logging.Handler):
-    """Streams log records into a tkinter ScrolledText widget."""
-
-    def __init__(self, text_widget: scrolledtext.ScrolledText) -> None:
-        super().__init__()
-        self._text = text_widget
-
-    def emit(self, record: logging.LogRecord) -> None:
-        msg = self.format(record) + "\n"
-        with contextlib.suppress(Exception):
-            self._text.after(0, self._append, msg)
-
-    def _append(self, msg: str) -> None:
-        try:
-            self._text.configure(state="normal")
-            self._text.insert(tk.END, msg)
-            self._text.see(tk.END)
-            self._text.configure(state="disabled")
-        except tk.TclError:
-            pass
 
 
 class App:
@@ -152,44 +126,29 @@ class App:
     # ------------------------------------------------------------------
 
     def _on_calibrate(self) -> None:
-        win = find_ttr_window()
-        if win is None:
-            self._status_var.set("Calibration failed — TTR not found")
-            return
-
-        set_calibrated_bounds(win)
-        log.info("Window locked: %dx%d at (%d,%d)", win.width, win.height, win.x, win.y)
-
-        frame = capture_window(win)
-        if frame is None:
-            self._status_var.set("Calibration failed — capture error")
-            return
-
         self._calibrate_btn.config(state="disabled")
         self._status_var.set("Calibrating…")
 
         def _run_calibration() -> None:
-            from ttr_bot.vision.template_matcher import calibrate_scale, clear_cache
-
-            clear_cache()
-            scale = calibrate_scale(frame)
-            self._root.after(0, self._calibration_done, scale, win.width, win.height)
+            result = CalibrationService().calibrate()
+            self._root.after(0, self._calibration_done, result)
 
         threading.Thread(target=_run_calibration, daemon=True).start()
 
-    def _calibration_done(self, scale: float, w: int, h: int) -> None:
+    def _calibration_done(self, result) -> None:
         self._calibrate_btn.config(state="normal")
-        if scale < 0:
-            self._status_var.set("Calibration failed — no known button visible")
+        if not result.success:
+            self._status_var.set(f"Calibration failed — {result.error}")
         else:
-            self._status_var.set(f"Calibrated: {w}x{h} scale={scale:.1f}")
+            msg = f"Calibrated: {result.width}x{result.height} scale={result.scale:.1f}"
+            self._status_var.set(msg)
 
     # ------------------------------------------------------------------
     # Logger
     # ------------------------------------------------------------------
 
     def _attach_logger(self) -> None:
-        handler = _TkLogHandler(self._log_text)
+        handler = TkLogHandler(self._log_text)
         handler.setLevel(logging.INFO)
         handler.setFormatter(logging.Formatter("%(asctime)s  %(message)s", datefmt="%H:%M:%S"))
         log.addHandler(handler)

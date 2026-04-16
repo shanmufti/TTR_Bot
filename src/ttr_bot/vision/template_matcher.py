@@ -6,16 +6,20 @@ Ported from ImageTemplateMatcher.cs / UIElementManager.cs in the reference bot.
 import os
 import threading
 import time
-from typing import NamedTuple
+from dataclasses import dataclass
 
 import cv2
 import numpy as np
 
 from ttr_bot.config import settings
 from ttr_bot.utils.logger import log
+from ttr_bot.vision.template_calibration import (
+    _CALIBRATION_ANCHORS as _CALIBRATION_ANCHORS,
+)
 
 
-class MatchResult(NamedTuple):
+@dataclass(frozen=True, slots=True)
+class MatchResult:
     """A single template match: position, confidence, and size."""
 
     x: int
@@ -25,30 +29,12 @@ class MatchResult(NamedTuple):
     height: int
 
 
-_COARSE_SCALE_RANGE = np.arange(0.8, 1.3, 0.1)
-_FINE_STEP = 0.04
 _FIND_SCALE_OFFSETS = np.array([0.0, -0.04, 0.04])
 
-_MIN_CALIBRATION_CONF = 0.60
-_MIN_CALIBRATION_CONF_RELAXED = 0.48
 _MIN_TEMPLATE_DIM = 10
 _MIN_TEMPLATE_DIM_DS = 8
-_DOWNSAMPLE_WIDTH_THRESHOLD = 1800
-_CALIBRATION_FAIL_CONF = 0.30
 _SCALE_IDENTITY_EPSILON = 0.01
 _OFFSET_ZERO_EPSILON = 1e-9
-
-_CALIBRATION_ANCHORS = [
-    "hud_bottom_right_icon",
-    "red_fishing_button",
-    "exit_fishing_button",
-    "plant_flower_button",
-    "pick_flower_button",
-    "watering_can_button",
-    "golf_pencil_button",
-    "golf_close_button",
-    "golf_turn_timer",
-]
 
 
 class TemplateMatcher:
@@ -110,145 +96,20 @@ class TemplateMatcher:
         return self._global_scale
 
     # ------------------------------------------------------------------
-    # Calibration
+    # Public accessors for calibration module
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def _match_at_scale(frame_bgr: np.ndarray, tmpl: np.ndarray, scale: float) -> float:
-        fh, fw = frame_bgr.shape[:2]
-        th, tw = tmpl.shape[:2]
-        new_w = int(tw * scale)
-        new_h = int(th * scale)
-        if new_w < _MIN_TEMPLATE_DIM or new_h < _MIN_TEMPLATE_DIM or new_w > fw or new_h > fh:
-            return -1.0
-        scaled = cv2.resize(tmpl, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
-        result = cv2.matchTemplate(frame_bgr, scaled, cv2.TM_CCOEFF_NORMED)
-        _, max_val, _, _ = cv2.minMaxLoc(result)
-        return float(max_val)
+    def load_template(self, name: str) -> np.ndarray | None:
+        """Public wrapper around :meth:`_load_template`."""
+        return self._load_template(name)
 
-    def calibrate_scale(self, frame_bgr: np.ndarray) -> float:
-        """Determine the window scale by matching a known template across scales."""
-        with self._lock:
-            return self._calibrate_scale_locked(frame_bgr)
-
-    def _calibrate_scale_locked(self, frame_bgr: np.ndarray) -> float:
+    def set_calibrated_scale(
+        self, scale: float | None, downsample_factor: int = 1
+    ) -> None:
+        """Apply a calibrated *scale* and reset caches."""
+        self._global_scale = scale
+        self._downsample_factor = downsample_factor
         self._scaled_template_cache.clear()
-
-        t_cal = time.monotonic()
-        fh, fw = frame_bgr.shape[:2]
-        self._downsample_factor = 2 if fw >= _DOWNSAMPLE_WIDTH_THRESHOLD else 1
-        log.info("calibrate_scale: frame=%dx%d downsample=%dx", fw, fh, self._downsample_factor)
-
-        best_anchor, best_scale, best_val = self._coarse_anchor_scan(frame_bgr)
-
-        if best_val < _CALIBRATION_FAIL_CONF:
-            log.warning(
-                "calibrate_scale FAILED: best conf=%.3f (no usable match). "
-                "Run: uv run python tools/snapshot_game_state.py --promote-template",
-                best_val,
-            )
-            self._global_scale = None
-            return -1.0
-
-        best_scale, best_val = self._fine_tune(frame_bgr, best_anchor, best_scale, best_val)
-
-        if best_val < _MIN_CALIBRATION_CONF_RELAXED:
-            log.warning(
-                "calibrate_scale FAILED: best conf=%.3f (need %.2f). "
-                "Recapture HUD with tools/snapshot_game_state.py --promote-template",
-                best_val,
-                _MIN_CALIBRATION_CONF_RELAXED,
-            )
-            self._global_scale = None
-            return -1.0
-
-        self._global_scale = best_scale
-        cal_ms = (time.monotonic() - t_cal) * 1000
-        if best_val < _MIN_CALIBRATION_CONF:
-            log.warning(
-                "calibrate_scale: relaxed accept anchor=%s scale=%.2f (conf=%.3f) %.0fms",
-                best_anchor,
-                best_scale,
-                best_val,
-                cal_ms,
-            )
-        else:
-            log.info(
-                "calibrate_scale: anchor=%s scale=%.2f (conf=%.3f) — locked (%.0fms)",
-                best_anchor,
-                best_scale,
-                best_val,
-                cal_ms,
-            )
-        return best_scale
-
-    def _coarse_anchor_scan(
-        self,
-        frame_bgr: np.ndarray,
-    ) -> tuple[str, float, float]:
-        """Try each anchor at coarse scales, return (anchor, scale, confidence)."""
-        best_val = -1.0
-        best_scale = 1.0
-        best_anchor = ""
-
-        for anchor in _CALIBRATION_ANCHORS:
-            tmpl = self._load_template(anchor)
-            if tmpl is None:
-                continue
-
-            t_anchor = time.monotonic()
-            anchor_best = -1.0
-            anchor_scale = 1.0
-            for scale in _COARSE_SCALE_RANGE:
-                val = self._match_at_scale(frame_bgr, tmpl, scale)
-                if val > anchor_best:
-                    anchor_best = val
-                    anchor_scale = scale
-
-            log.info(
-                "calibrate coarse: %-24s best=%.3f @ scale=%.2f (%.0fms)",
-                anchor,
-                anchor_best,
-                anchor_scale,
-                (time.monotonic() - t_anchor) * 1000,
-            )
-
-            if anchor_best > best_val:
-                best_val = anchor_best
-                best_scale = anchor_scale
-                best_anchor = anchor
-
-            if best_val >= _MIN_CALIBRATION_CONF:
-                break
-
-        return best_anchor, best_scale, best_val
-
-    def _fine_tune(
-        self,
-        frame_bgr: np.ndarray,
-        anchor: str,
-        coarse_scale: float,
-        coarse_val: float,
-    ) -> tuple[float, float]:
-        """Refine the scale around *coarse_scale*. Returns (scale, confidence)."""
-        t_fine = time.monotonic()
-        tmpl = self._load_template(anchor)
-        best_scale, best_val = coarse_scale, coarse_val
-
-        if tmpl is not None:
-            fine_range = np.arange(
-                coarse_scale - 0.08,
-                coarse_scale + 0.08 + _FINE_STEP,
-                _FINE_STEP,
-            )
-            for scale in fine_range:
-                val = self._match_at_scale(frame_bgr, tmpl, scale)
-                if val > best_val:
-                    best_val = val
-                    best_scale = scale
-
-        log.info("calibrate fine-tune: %.0fms", (time.monotonic() - t_fine) * 1000)
-        return best_scale, best_val
 
     # ------------------------------------------------------------------
     # Scaled template helpers
@@ -476,7 +337,9 @@ def clear_cache() -> None:
 
 def calibrate_scale(frame_bgr: np.ndarray) -> float:
     """Auto-detect the UI scale from a game screenshot."""
-    return _default.calibrate_scale(frame_bgr)
+    from ttr_bot.vision.template_calibration import calibrate_scale as _cal
+
+    return _cal(_default, frame_bgr)
 
 
 def find_template(

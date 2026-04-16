@@ -19,7 +19,7 @@ from ttr_bot.gardening.gardening_bot import GardenBot
 from ttr_bot.utils.logger import log
 
 
-@dataclass
+@dataclass(slots=True)
 class RoutineProgress:
     """Live progress snapshot sent to the UI during a sweep routine."""
 

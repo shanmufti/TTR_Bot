@@ -21,7 +21,7 @@ import cv2
 
 from ttr_bot.config import settings
 from ttr_bot.core.screen_capture import grab_frame
-from ttr_bot.gardening.bed_ui import classify_bed_state
+from ttr_bot.gardening.bed_ui import BedState, classify_bed_state
 from ttr_bot.gardening.gardening_bot import GardenBot
 from ttr_bot.utils import debug_frames as dbg
 from ttr_bot.utils.logger import log
@@ -33,7 +33,7 @@ _HEARTBEAT_POLLS = 30  # log a heartbeat every ~9 s of silence
 _UNKNOWN_STREAK_LIMIT = 3  # unknown frames before declaring bed UI gone
 
 
-@dataclass
+@dataclass(slots=True)
 class WatcherResult:
     """Summary returned after a garden-watcher session ends."""
 
@@ -110,7 +110,7 @@ class GardenWatcher:
             cls_ms = (time.monotonic() - t_cls) * 1000
             poll_ms = (time.monotonic() - t_poll) * 1000
 
-            if state not in ("pick", "plant"):
+            if state not in (BedState.PICK, BedState.PLANT):
                 polls_since_log += 1
                 if polls_since_log >= _HEARTBEAT_POLLS:
                     log.info(
@@ -163,13 +163,13 @@ class GardenWatcher:
                 unknown_streak += 1
             else:
                 state = classify_bed_state(frame)
-                if state == "plant":
+                if state == BedState.PLANT:
                     log.info(
                         "[Watcher] new bed detected (plant) after %.0fms",
                         (time.monotonic() - t0) * 1000,
                     )
                     return
-                if state == "unknown":
+                if state == BedState.UNKNOWN:
                     unknown_streak += 1
                 else:
                     unknown_streak = 0
@@ -196,7 +196,7 @@ class GardenWatcher:
         bean_sequence: str,
         result: WatcherResult,
     ) -> None:
-        if state == "pick":
+        if state == BedState.PICK:
             self._status(f"Bed #{bed_num}: picking → planting {flower_name} → watering")
             if self._bot.pick_flower():
                 result.beds_picked += 1
@@ -208,7 +208,7 @@ class GardenWatcher:
                 )
                 if self._bot.plant_flower_no_pick(flower_name, bean_sequence):
                     result.beds_planted += 1
-        elif state == "plant":
+        elif state == BedState.PLANT:
             self._status(f"Bed #{bed_num}: planting {flower_name} → watering")
             if self._bot.plant_flower_no_pick(flower_name, bean_sequence):
                 result.beds_planted += 1

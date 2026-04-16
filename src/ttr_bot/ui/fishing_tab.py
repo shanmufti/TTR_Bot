@@ -5,13 +5,12 @@ import tkinter as tk
 from collections.abc import Callable
 
 from ttr_bot.config import settings
-from ttr_bot.core.screen_capture import capture_window
-from ttr_bot.core.window_manager import find_ttr_window, set_calibrated_bounds
-from ttr_bot.fishing.cast_recorder import CastRecorder, fit_cast_params
+from ttr_bot.core.calibration_service import CalibrationService
+from ttr_bot.fishing.cast_fitter import fit_cast_params
+from ttr_bot.fishing.cast_recorder import CastRecorder
 from ttr_bot.fishing.fishing_bot import FishingBot, FishingConfig, FishingStats
 from ttr_bot.ui.overlay import OverlayWindow
 from ttr_bot.ui.theme import ACCENT, BG, ENTRY_BG, FG
-from ttr_bot.utils.logger import log
 
 
 class FishingTab:
@@ -173,7 +172,7 @@ class FishingTab:
     def _wire_callbacks(self) -> None:
         self._bot.on_stats_update = self._on_stats_thread
         self._bot.on_status_update = self._on_status_thread
-        self._bot.on_fishing_ended = self._on_ended_thread
+        self._bot.on_ended = self._on_ended_thread
 
     # ------------------------------------------------------------------
     # Fishing handlers
@@ -187,28 +186,12 @@ class FishingTab:
         self._status_var.set("Calibrating…")
 
         def _calibrate_and_start() -> None:
-            from ttr_bot.vision.template_matcher import calibrate_scale, clear_cache
-
-            win = find_ttr_window()
-            if win is None:
-                self._root.after(0, self._start_failed, "TTR window not found")
+            result = CalibrationService().calibrate()
+            if not result.success:
+                self._root.after(0, self._start_failed, result.error)
                 return
 
-            set_calibrated_bounds(win)
-            log.info("Window locked: %dx%d at (%d,%d)", win.width, win.height, win.x, win.y)
-
-            clear_cache()
-            frame = capture_window(win)
-            if frame is None:
-                self._root.after(0, self._start_failed, "Capture failed")
-                return
-
-            scale = calibrate_scale(frame)
-            if scale < 0:
-                self._root.after(0, self._start_failed, "Calibration failed — sit on dock first!")
-                return
-
-            self._root.after(0, self._start_fishing, scale, win.width, win.height)
+            self._root.after(0, self._start_fishing, result.scale, result.width, result.height)
 
         threading.Thread(target=_calibrate_and_start, daemon=True).start()
 
@@ -260,7 +243,7 @@ class FishingTab:
             def _update_status(msg: str) -> None:
                 self._root.after(0, self._record_status.config, {"text": msg})
 
-            self._recorder.on_status = _update_status
+            self._recorder.on_status_update = _update_status
             self._recorder.start()
             self._record_btn.config(text="Stop Recording")
             self._record_status.config(text="Fish normally — recording…")
@@ -272,7 +255,7 @@ class FishingTab:
             self._record_status.config(text="Fitting cast curves…")
             params = fit_cast_params(samples)
             if params is not None:
-                from ttr_bot.core.input_controller import reload_cast_params
+                from ttr_bot.core.cast_input import reload_cast_params
 
                 reload_cast_params()
                 self._record_status.config(

@@ -1,85 +1,56 @@
 """Orchestrates golf: auto course detection + JSON action replay."""
 
-import threading
 import time
 from collections.abc import Callable
 from time import perf_counter
 
 from ttr_bot.config import settings
+from ttr_bot.core.bot_base import BotBase
+from ttr_bot.golf.action_files import action_file_exists, path_for_stem
 from ttr_bot.golf.action_player import perform_golf_actions
-from ttr_bot.golf.detector import (
-    action_file_exists,
-    path_for_stem,
-    wait_for_course_detection,
-    wait_until_ready_to_swing,
-)
+from ttr_bot.golf.course_detector import wait_for_course_detection
+from ttr_bot.golf.swing_detector import wait_until_ready_to_swing
 from ttr_bot.utils.logger import log
 
 
-class GolfBot:
+class GolfBot(BotBase):
     """Background golf automation (same threading style as GardenBot / FishingBot)."""
 
     def __init__(self) -> None:
-        self._stop_event = threading.Event()
-        self._thread: threading.Thread | None = None
-        self._running = False
-
-        self.on_status_update: Callable[[str], None] | None = None
-        self.on_golf_ended: Callable[[str], None] | None = None
-
-        # Set by UI for auto mode when manual course pick is needed
+        super().__init__()
         self.on_need_manual_course: Callable[[list[str]], str | None] | None = None
 
-    @property
-    def running(self) -> bool:
-        return self._running
-
     def stop(self) -> None:
-        self._stop_event.set()
+        super().stop()
 
     def start_custom_file(self, file_path: str) -> None:
         """Replay a single JSON file."""
-        self._stop_event.clear()
 
         def _work() -> None:
-            self._running = True
             try:
-                self._emit("Starting custom golf actions…")
+                self._status("Starting custom golf actions…")
                 perform_golf_actions(file_path, self._stop_event)
                 reason = "cancelled" if self._stop_event.is_set() else "completed"
-                self._emit_done(reason)
+                self._finish(reason)
             finally:
                 self._running = False
 
-        self._thread = threading.Thread(target=_work, daemon=True)
-        self._thread.start()
+        self._start_thread(_work)
 
     def start_auto_round(self, holes: int = 3) -> None:
         """Detect course each hole, wait for turn, execute matching JSON."""
-        self._stop_event.clear()
 
         def _work() -> None:
-            self._running = True
             try:
                 self._run_continuous(holes)
             finally:
-                self._running = False
                 if not self._stop_event.is_set():
-                    self._emit_done("completed")
+                    self._finish("completed")
                 else:
-                    self._emit_done("cancelled")
+                    self._finish("cancelled")
+                self._running = False
 
-        self._thread = threading.Thread(target=_work, daemon=True)
-        self._thread.start()
-
-    def _emit(self, msg: str) -> None:
-        log.info("Golf: %s", msg)
-        if self.on_status_update:
-            self.on_status_update(msg)
-
-    def _emit_done(self, reason: str) -> None:
-        if self.on_golf_ended:
-            self.on_golf_ended(reason)
+        self._start_thread(_work)
 
     def _run_continuous(self, holes_per_round: int) -> None:
         holes_played = 0
@@ -87,7 +58,7 @@ class GolfBot:
 
         while holes_played < holes_per_round and not self._stop_event.is_set():
             hole_num = holes_played + 1
-            self._emit(f"Hole {hole_num}/{holes_per_round}…")
+            self._status(f"Hole {hole_num}/{holes_per_round}…")
 
             played = self._play_hole(hole_num, holes_per_round, is_first=(holes_played == 0))
             if self._stop_event.is_set():
@@ -96,15 +67,15 @@ class GolfBot:
                 continue
 
             holes_played += 1
-            self._emit(f"Hole {holes_played}/{holes_per_round} done.")
+            self._status(f"Hole {holes_played}/{holes_per_round} done.")
 
             if holes_played < holes_per_round:
-                self._emit(
+                self._status(
                     f"Step: between-holes sleep {settings.GOLF_BETWEEN_HOLES_DELAY_S:.0f}s…"
                 )
                 time.sleep(settings.GOLF_BETWEEN_HOLES_DELAY_S)
 
-        self._emit("Golf stopped." if self._stop_event.is_set() else "Round complete.")
+        self._status("Golf stopped." if self._stop_event.is_set() else "Round complete.")
         log.info(
             "Golf [auto] — round finished in %.1fs (holes=%d/%d)",
             perf_counter() - round_t0,
@@ -120,7 +91,7 @@ class GolfBot:
         hole_t0 = perf_counter()
 
         if not is_first:
-            self._emit("Step: wait for turn (before scoreboard)…")
+            self._status("Step: wait for turn (before scoreboard)…")
             wait_until_ready_to_swing(
                 self._stop_event.is_set,
                 interval_s=0.5,
@@ -142,11 +113,11 @@ class GolfBot:
             return False
 
         if not action_file_exists(stem):
-            self._emit(f"No action file for: {stem}.json — add it under golf_actions/")
+            self._status(f"No action file for: {stem}.json — add it under golf_actions/")
             time.sleep(2.0)
             return False
 
-        self._emit("Step: wait for turn (before swing)…")
+        self._status("Step: wait for turn (before swing)…")
         wait_until_ready_to_swing(self._stop_event.is_set, interval_s=0.5, phase="pre_swing")
         if self._stop_event.is_set():
             return False
@@ -154,7 +125,7 @@ class GolfBot:
         time.sleep(settings.GOLF_PRE_SWING_DELAY_S)
 
         path = path_for_stem(stem)
-        self._emit(f"Step: replay JSON — {stem}")
+        self._status(f"Step: replay JSON — {stem}")
         t_play = perf_counter()
         perform_golf_actions(path, self._stop_event)
         log.info(
@@ -181,10 +152,12 @@ class GolfBot:
         ) -> str | None:
             if _cb:
                 return _cb(options)
-            self._emit("No course detected — add pytesseract+tesseract, templates, or JSON files.")
+            self._status(
+                "No course detected — add pytesseract+tesseract, templates, or JSON files."
+            )
             return None
 
-        self._emit("Step: detect course via scoreboard…")
+        self._status("Step: detect course via scoreboard…")
         t0 = perf_counter()
         stem = wait_for_course_detection(
             self._stop_event.is_set,

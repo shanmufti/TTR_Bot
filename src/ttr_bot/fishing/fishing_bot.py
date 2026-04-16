@@ -5,24 +5,26 @@ cast button visible.  No sell trips, no walking — just fishing.
 """
 
 import contextlib
-import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
 from ttr_bot.config import settings
+from ttr_bot.core import cast_input
 from ttr_bot.core import input_controller as inp
+from ttr_bot.core.bot_base import BotBase
 from ttr_bot.core.screen_capture import capture_window
 from ttr_bot.core.window_manager import WindowInfo, find_ttr_window, is_window_available
+from ttr_bot.fishing import bite_detector, fishing_debug
+from ttr_bot.fishing.bite_detector import BiteResult, CastOutcome
 from ttr_bot.utils import debug_frames as dbg
 from ttr_bot.utils.logger import log
 from ttr_bot.vision.color_matcher import average_water_brightness, build_water_mask
-from ttr_bot.vision.fish_detector import detect_fish_shadows, find_best_fish, has_catch_popup
+from ttr_bot.vision.fish_detector import detect_fish_shadows, find_best_fish
 from ttr_bot.vision.pond_detector import PondArea, detect_pond
-from ttr_bot.vision.template_matcher import find_template
 
 
-@dataclass
+@dataclass(slots=True)
 class FishingStats:
     """Running counters for a single fishing session."""
 
@@ -32,7 +34,7 @@ class FishingStats:
     skipped: int = 0
 
 
-@dataclass
+@dataclass(slots=True)
 class FishingConfig:
     """User-adjustable parameters for a fishing run."""
 
@@ -40,55 +42,25 @@ class FishingConfig:
     bite_timeout: float = settings.BITE_TIMEOUT_S
 
 
-class FishingBot:
+class FishingBot(BotBase):
     """Simple fishing loop: find button → shadow → cast → bite → repeat."""
 
     def __init__(self) -> None:
+        super().__init__()
         self.stats = FishingStats()
         self.config = FishingConfig()
-
-        self._running = False
-        self._paused = False
-        self._thread: threading.Thread | None = None
-        self._stop_event = threading.Event()
         self._last_miss_target: tuple[int, int] | None = None
 
         self.on_stats_update: Callable[[FishingStats], None] | None = None
-        self.on_status_update: Callable[[str], None] | None = None
-        self.on_fishing_ended: Callable[[str], None] | None = None
-
-    @property
-    def running(self) -> bool:
-        return self._running
-
-    @property
-    def paused(self) -> bool:
-        return self._paused
 
     def start(self, config: FishingConfig) -> None:
-        if self._running:
-            return
         self.config = config
         self.stats = FishingStats()
         self._last_miss_target = None
-        self._stop_event.clear()
-        self._running = True
-        self._paused = False
-        self._thread = threading.Thread(target=self._run, daemon=True)
-        self._thread.start()
+        self._start_thread(self._run)
 
     def stop(self) -> None:
-        self._stop_event.set()
-        thread = self._thread
-        if thread is not None:
-            thread.join(timeout=5.0)
-        self._running = False
-        self._thread = None
-
-    def toggle_pause(self) -> None:
-        self._paused = not self._paused
-        log.info("Fishing %s", "PAUSED" if self._paused else "RESUMED")
-        self._status("PAUSED" if self._paused else "RESUMED")
+        super().stop()
 
     # ------------------------------------------------------------------
     # Main loop
@@ -113,12 +85,8 @@ class FishingBot:
             self._finish(f"Error: {exc}")
 
     def _preflight(self) -> WindowInfo | None:
-        """Validate window before the cast loop starts.
-
-        Returns the WindowInfo on success, or None after calling _finish.
-        """
-
-        inp.reload_cast_params()
+        """Validate window before the cast loop starts."""
+        cast_input.reload_cast_params()
 
         if not is_window_available():
             self._finish("TTR window not found")
@@ -135,11 +103,6 @@ class FishingBot:
         self._status("Fishing started")
         return win
 
-    def _wait_if_paused(self) -> None:
-        """Block while the bot is paused."""
-        while self._paused and not self._stop_event.is_set():
-            time.sleep(0.25)
-
     def _cast_loop(self, win: WindowInfo, pond: PondArea, avg_water_bright: int) -> None:
         """Run the main cast-check-repeat loop until done or stopped."""
         consecutive_skips = 0
@@ -154,13 +117,13 @@ class FishingBot:
 
             result = self._one_cast(win, pond, avg_water_bright)
 
-            if result == "skipped":
+            if result is CastOutcome.SKIPPED:
                 consecutive_skips += 1
                 backoff = min(2.0 * consecutive_skips, 10.0)
                 self._status(f"No target — waiting {backoff:.0f}s")
                 time.sleep(backoff)
-            elif result in ("no_beans", "bucket_full"):
-                msg = "Out of jellybeans" if result == "no_beans" else "Bucket is full"
+            elif result in (CastOutcome.NO_BEANS, CastOutcome.BUCKET_FULL):
+                msg = "Out of jellybeans" if result is CastOutcome.NO_BEANS else "Bucket is full"
                 self._finish(msg)
                 return
             else:
@@ -169,118 +132,17 @@ class FishingBot:
         reason = "User stopped" if self._stop_event.is_set() else "Completed"
         self._finish(reason)
 
-    def _save_shadow_debug(self, frame, btn, pond, candidates, shadow) -> None:
-        """Save an annotated debug frame showing shadow candidates and cast target."""
-        margin_bot = pond.height * 40 // 100
-        margin_top = pond.height * 10 // 100
-        margin_x = pond.width * 10 // 100
-        inner_y1 = pond.y + margin_top
-        inner_y2 = pond.y + pond.height - margin_bot
-        inner_x1 = pond.x + margin_x
-        inner_x2 = pond.x + pond.width - margin_x
-
-        anns: list[dict] = [
-            {
-                "type": "rect",
-                "pt1": (pond.x, pond.y),
-                "pt2": (pond.x + pond.width, pond.y + pond.height),
-                "color": (100, 100, 100),
-                "thickness": 1,
-            },
-            {
-                "type": "rect",
-                "pt1": (inner_x1, inner_y1),
-                "pt2": (inner_x2, inner_y2),
-                "color": (0, 200, 200),
-                "thickness": 2,
-            },
-        ]
-        for c in candidates:
-            clr = (0, 255, 255) if c.has_bubbles else (0, 165, 255)
-            anns.append(
-                {
-                    "type": "circle",
-                    "center": (c.cx, c.cy),
-                    "radius": 18,
-                    "color": clr,
-                    "thickness": 2,
-                }
-            )
-            anns.append(
-                {
-                    "type": "text",
-                    "pos": (c.cx + 20, c.cy - 6),
-                    "text": f"s={c.score:.2f} {'B' if c.has_bubbles else ''}",
-                    "color": clr,
-                    "thickness": 2,
-                }
-            )
-        if shadow is not None:
-            anns.append(
-                {
-                    "type": "circle",
-                    "center": shadow,
-                    "radius": 24,
-                    "color": (0, 255, 0),
-                    "thickness": 4,
-                }
-            )
-            anns.append(
-                {
-                    "type": "line",
-                    "pt1": (btn.x, btn.y),
-                    "pt2": shadow,
-                    "color": (0, 255, 0),
-                    "thickness": 2,
-                }
-            )
-        anns.append(
-            {
-                "type": "circle",
-                "center": (btn.x, btn.y),
-                "radius": 14,
-                "color": (0, 0, 255),
-                "thickness": 3,
-            }
-        )
-        dbg.save(frame, "cast_target" if shadow else "no_shadow", annotations=anns)
-
-    def _save_bite_debug(self, win: WindowInfo, bite_result: str) -> None:
-        """Save a debug frame capturing the bite outcome."""
-        bite_frame = capture_window(win)
-        if bite_frame is not None:
-            dbg.save(
-                bite_frame,
-                f"bite_{bite_result}",
-                annotations=[
-                    {
-                        "type": "text",
-                        "pos": (20, 40),
-                        "text": f"result={bite_result}  cast#{self.stats.casts}",
-                        "color": (0, 255, 0),
-                        "thickness": 2,
-                    },
-                ],
-            )
-
-    def _one_cast(self, win: WindowInfo, pond: PondArea, avg_water_bright: int) -> str:
-        """Execute a single cast cycle.
-
-        Returns:
-            ``"cast"``        — cast completed (caught or missed)
-            ``"skipped"``     — no button or no shadow found
-            ``"no_beans"``    — out of jellybeans
-            ``"bucket_full"`` — bucket full
-        """
+    def _one_cast(self, win: WindowInfo, pond: PondArea, avg_water_bright: int) -> CastOutcome:
+        """Execute a single cast cycle."""
         inp.ensure_focused()
 
-        self._dismiss_blocking_dialog(win)
+        bite_detector.dismiss_blocking_dialog(win)
 
-        btn, frame = self._find_cast_button(win)
+        btn, frame = bite_detector.find_cast_button(win, self._stop_event)
         if btn is None:
             self.stats.skipped += 1
             self._notify_stats()
-            return "skipped"
+            return CastOutcome.SKIPPED
 
         fresh = capture_window(win)
         if fresh is not None:
@@ -295,40 +157,42 @@ class FishingBot:
         )
 
         if dbg.is_enabled():
-            self._save_shadow_debug(frame, btn, pond, candidates, shadow)
+            fishing_debug.save_shadow_debug(frame, btn, pond, candidates, shadow)
 
         if shadow is None:
             self.stats.skipped += 1
             self._notify_stats()
-            return "skipped"
+            return CastOutcome.SKIPPED
 
         sx, sy = shadow
         log.info("Casting at shadow (%d,%d) btn=(%d,%d)", sx, sy, btn.x, btn.y)
         self._status(f"Casting at ({sx},{sy})")
-        inp.fishing_cast_at(btn.x, btn.y, sx, sy, window=win)
+        cast_input.fishing_cast_at(btn.x, btn.y, sx, sy, window=win)
 
         self.stats.casts += 1
         self._notify_stats()
 
         time.sleep(settings.POST_CAST_DELAY_S)
 
-        bite_result = self._wait_for_bite(win)
+        bite_result = bite_detector.wait_for_bite(
+            win, self.config.bite_timeout, self._stop_event
+        )
 
         if dbg.is_enabled():
-            self._save_bite_debug(win, bite_result)
+            fishing_debug.save_bite_debug(win, bite_result.value, self.stats.casts)
 
-        if bite_result == "caught":
+        if bite_result is BiteResult.CAUGHT:
             self.stats.caught += 1
             self._last_miss_target = None
             self._status(f"Caught! ({self.stats.caught} total)")
-        elif bite_result == "jellybean":
+        elif bite_result is BiteResult.JELLYBEAN:
             self._status("Out of jellybeans — dismissing dialog")
-            self._dismiss_blocking_dialog(win)
-            return "no_beans"
-        elif bite_result == "bucket_full":
+            bite_detector.dismiss_blocking_dialog(win)
+            return CastOutcome.NO_BEANS
+        elif bite_result is BiteResult.BUCKET_FULL:
             self._status("Bucket full — dismissing dialog")
-            self._dismiss_blocking_dialog(win)
-            return "bucket_full"
+            bite_detector.dismiss_blocking_dialog(win)
+            return CastOutcome.BUCKET_FULL
         else:
             self.stats.missed += 1
             self._last_miss_target = (sx, sy)
@@ -336,7 +200,7 @@ class FishingBot:
         self._notify_stats()
 
         time.sleep(settings.BETWEEN_CAST_DELAY_S)
-        return "cast"
+        return CastOutcome.CAST
 
     # ------------------------------------------------------------------
     # Pond detection (once per session)
@@ -346,8 +210,6 @@ class FishingBot:
         """Capture a frame and detect the pond.
 
         Returns ``(pond, avg_water_bright)`` or *None* on failure.
-        The brightness is cached for the session and passed to shadow/bubble
-        detection so it doesn't need to be recomputed every cast.
         """
         for _ in range(5):
             frame = capture_window(win)
@@ -390,97 +252,6 @@ class FishingBot:
         return None
 
     # ------------------------------------------------------------------
-    # Find the red cast button (with retries)
-    # ------------------------------------------------------------------
-
-    def _find_cast_button(self, win: WindowInfo):
-        """Poll for the red fishing button. Returns (MatchResult, frame) or (None, None)."""
-        for _ in range(30):
-            if self._stop_event.is_set():
-                return None, None
-            frame = capture_window(win)
-            if frame is not None:
-                btn = find_template(frame, "red_fishing_button", threshold=0.55)
-                if btn is not None:
-                    return btn, frame
-            time.sleep(0.1)
-
-        log.warning("Cast button not found after 30 attempts")
-        self._status("Cast button not found — is toon at dock?")
-        return None, None
-
-    # ------------------------------------------------------------------
-    # Bite detection
-    # ------------------------------------------------------------------
-
-    def _wait_for_bite(self, win: WindowInfo) -> str:
-        """Poll until a popup appears or timeout.
-
-        Check order is optimised: the cheap HSV check runs every poll;
-        the more expensive template matches only run every 3rd poll.
-
-        Returns:
-            ``"caught"``       — fish-caught popup detected
-            ``"jellybean"``    — out-of-jellybeans dialog detected
-            ``"bucket_full"``  — bucket-full popup detected
-            ``"timeout"``      — nothing happened before deadline
-        """
-        deadline = time.monotonic() + self.config.bite_timeout
-        poll = 0
-        while time.monotonic() < deadline:
-            if self._stop_event.is_set():
-                return "timeout"
-
-            frame = capture_window(win)
-            if frame is None:
-                time.sleep(0.05)
-                continue
-
-            if has_catch_popup(frame):
-                return "caught"
-
-            # Template checks are ~3x more expensive than HSV; skip
-            # some polls to keep the loop responsive for catch detection.
-            if poll % 3 == 0:
-                if find_template(frame, "jellybean_exit") is not None:
-                    return "jellybean"
-                if find_template(frame, "ok_button") is not None:
-                    return "bucket_full"
-
-            poll += 1
-            time.sleep(settings.BITE_POLL_INTERVAL_S)
-        return "timeout"
-
-    # ------------------------------------------------------------------
-    # Dialog dismissal
-    # ------------------------------------------------------------------
-
-    def _dismiss_blocking_dialog(self, win: WindowInfo) -> None:
-        """Click away any blocking dialog (jellybean / bucket-full / catch popup).
-
-        Tries up to 3 times, looking for known dismiss buttons.
-        """
-        for _ in range(3):
-            frame = capture_window(win)
-            if frame is None:
-                time.sleep(0.2)
-                continue
-
-            target = (
-                find_template(frame, "jellybean_exit", threshold=0.75)
-                or find_template(frame, "ok_button", threshold=0.75)
-                or find_template(frame, "fish_popup_close", threshold=0.75)
-            )
-            if target is None:
-                return
-
-            log.info("Dismissing dialog: clicking (%d,%d)", target.x, target.y)
-            inp.ensure_focused()
-            time.sleep(0.1)
-            inp.click(target.x, target.y, window=win)
-            time.sleep(1.0)
-
-    # ------------------------------------------------------------------
     # Notifications
     # ------------------------------------------------------------------
 
@@ -489,14 +260,7 @@ class FishingBot:
             with contextlib.suppress(Exception):
                 self.on_stats_update(self.stats)
 
-    def _status(self, msg: str) -> None:
-        log.info(msg)
-        if self.on_status_update:
-            with contextlib.suppress(Exception):
-                self.on_status_update(msg)
-
     def _finish(self, reason: str) -> None:
-        self._running = False
         log.info(
             "Fishing ended: %s (casts=%d caught=%d missed=%d skipped=%d)",
             reason,
@@ -505,6 +269,4 @@ class FishingBot:
             self.stats.missed,
             self.stats.skipped,
         )
-        if self.on_fishing_ended:
-            with contextlib.suppress(Exception):
-                self.on_fishing_ended(reason)
+        super()._finish(reason)

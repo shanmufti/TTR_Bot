@@ -4,10 +4,19 @@ All bed detection and state classification goes through here so template
 matching and thresholds stay consistent.
 """
 
+import enum
 import time
 
 from ttr_bot.utils.logger import log
 from ttr_bot.vision import template_matcher as tm
+
+
+class BedState(enum.Enum):
+    """Possible states of a garden flower bed."""
+
+    PICK = "pick"
+    PLANT = "plant"
+    UNKNOWN = "unknown"
 
 # Order matters for debugging labels; detection tries each until one matches.
 BED_BUTTON_NAMES = (
@@ -31,36 +40,28 @@ def detect_bed_button(frame) -> str | None:
     return None
 
 
-def classify_bed_state(frame) -> str:
-    """Return ``pick``, ``plant``, or ``unknown``.
+def classify_bed_state(frame) -> BedState:
+    """Classify the current garden bed UI state.
 
     Uses a stricter confidence threshold than general template matching to
     avoid cross-matches between the visually similar pick/plant/remove icons.
-
-    Checks are ordered for fastest early exit:
-      1. plant_flower_button → ``plant`` (empty bed)
-      2. pick_flower_button  → ``pick``  (grown flower)
-      3. remove_button       → ``pick``  (cross-matches pick slot)
-      4. watering_can_button → ``plant`` (sidebar visible but main buttons
-         didn't match — assume plantable bed as a safe fallback)
-      5. nothing             → ``unknown``
     """
     t0 = time.monotonic()
 
     plant = tm.find_template(frame, "plant_flower_button", threshold=_CLASSIFY_THRESHOLD)
     if plant is not None:
         log.info("  classify → plant (conf=%.3f, %.0fms)", plant.confidence, _ms(t0))
-        return "plant"
+        return BedState.PLANT
 
     pick = tm.find_template(frame, "pick_flower_button", threshold=_CLASSIFY_THRESHOLD)
     if pick is not None:
         log.info("  classify → pick (conf=%.3f, %.0fms)", pick.confidence, _ms(t0))
-        return "pick"
+        return BedState.PICK
 
     remove = tm.find_template(frame, "remove_button", threshold=_CLASSIFY_THRESHOLD)
     if remove is not None:
         log.info("  classify → pick via remove (conf=%.3f, %.0fms)", remove.confidence, _ms(t0))
-        return "pick"
+        return BedState.PICK
 
     water = tm.find_template(frame, "watering_can_button")
     if water is not None:
@@ -69,12 +70,12 @@ def classify_bed_state(frame) -> str:
             log.info(
                 "  classify → plant (retry conf=%.3f, %.0fms)", plant_retry.confidence, _ms(t0)
             )
-            return "plant"
+            return BedState.PLANT
         log.info("  classify → unknown (sidebar visible, %.0fms)", _ms(t0))
-        return "unknown"
+        return BedState.UNKNOWN
 
     log.info("  classify → unknown (%.0fms)", _ms(t0))
-    return "unknown"
+    return BedState.UNKNOWN
 
 
 def _ms(t0: float) -> float:
