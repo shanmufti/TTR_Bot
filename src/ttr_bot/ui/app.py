@@ -14,12 +14,8 @@ from ttr_bot.core.window_manager import (
     is_window_available,
     set_calibrated_bounds,
 )
+from ttr_bot.ui.theme import ACCENT, BG, ENTRY_BG, FG
 from ttr_bot.utils.logger import log
-
-BG = "#0f3460"
-FG = "#eaeaea"
-ACCENT = "#e94560"
-ENTRY_BG = "#16213e"
 
 
 class _TkLogHandler(logging.Handler):

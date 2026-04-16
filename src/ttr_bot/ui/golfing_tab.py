@@ -11,12 +11,9 @@ from tkinter import ttk
 from ttr_bot.golf.action_player import load_actions, shot_summary
 from ttr_bot.golf.detector import list_action_stems, path_for_stem
 from ttr_bot.golf.golf_bot import GolfBot
+from ttr_bot.ui.theme import ACCENT, BG, ENTRY_BG, FG
 from ttr_bot.utils.logger import log
 
-BG = "#0f3460"
-FG = "#eaeaea"
-ACCENT = "#e94560"
-ENTRY_BG = "#16213e"
 _STOP = "■ Stop"
 
 

@@ -12,12 +12,8 @@ from ttr_bot.core.window_manager import find_ttr_window, set_calibrated_bounds
 from ttr_bot.fishing.cast_recorder import CastRecorder, fit_cast_params
 from ttr_bot.fishing.fishing_bot import FishingBot, FishingConfig, FishingStats
 from ttr_bot.ui.overlay import OverlayWindow
+from ttr_bot.ui.theme import ACCENT, BG, ENTRY_BG, FG
 from ttr_bot.utils.logger import log
-
-BG = "#0f3460"
-FG = "#eaeaea"
-ACCENT = "#e94560"
-ENTRY_BG = "#16213e"
 
 
 class FishingTab:
@@ -264,6 +260,7 @@ class FishingTab:
 
             threading.Thread(target=_finish_recording, daemon=True).start()
         else:
+
             def _update_status(msg: str) -> None:
                 self._root.after(0, self._record_status.config, {"text": msg})
 

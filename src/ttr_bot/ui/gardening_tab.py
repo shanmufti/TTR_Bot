@@ -9,11 +9,8 @@ from tkinter import ttk
 from ttr_bot.gardening.flowers import BEAN_COLORS, get_flowers_by_beans, lookup_flower
 from ttr_bot.gardening.gardening_bot import GardenBot, GardeningStats
 from ttr_bot.gardening.routine_runner import RoutineProgress, RoutineRunner
+from ttr_bot.ui.theme import ACCENT, BG, ENTRY_BG, FG
 
-BG = "#0f3460"
-FG = "#eaeaea"
-ACCENT = "#e94560"
-ENTRY_BG = "#16213e"
 _STOP_LABEL = "■ Stop"
 _MSG_SELECT_FLOWER = "Select a flower first"
 
