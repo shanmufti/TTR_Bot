@@ -17,6 +17,8 @@ import numpy as np
 
 
 class FlowerBlob(NamedTuple):
+    """A detected flower location with bounding-box data."""
+
     cx: int
     cy: int
     area: int

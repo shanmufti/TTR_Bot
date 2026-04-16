@@ -34,6 +34,8 @@ _RETINA_SCALE = settings.RETINA_SCALE
 
 @dataclass
 class CastSample:
+    """Raw observation from a single user-performed cast."""
+
     button_x: int
     button_y: int
     target_x: int

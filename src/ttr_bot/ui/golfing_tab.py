@@ -18,6 +18,8 @@ _STOP = "■ Stop"
 
 
 class GolfingTab:
+    """Tab for custom golf JSON replay and auto-round controls."""
+
     def __init__(
         self,
         parent: tk.Frame,

@@ -29,10 +29,12 @@ CALIBRATION_DRAGS = [
 
 
 class CalibrationSample(NamedTuple):
-    drag_dx: float  # known drag x (screen px)
-    drag_dy: float  # known drag y (screen px)
-    land_dx: float  # detected bobber x offset from button (retina frame px)
-    land_dy: float  # detected bobber y offset from button (retina frame px)
+    """One calibration cast: known drag vector paired with observed landing."""
+
+    drag_dx: float
+    drag_dy: float
+    land_dx: float
+    land_dy: float
 
 
 def detect_bobber(

@@ -30,6 +30,8 @@ _SKIPPED = frozenset({"MOVE TO LEFT TEE SPOT", "MOVE TO RIGHT TEE SPOT"})
 
 @dataclass
 class GolfActionCommand:
+    """One step in a custom golf action sequence."""
+
     action: str
     duration: int
     command: str = ""
@@ -45,6 +47,8 @@ class GolfActionCommand:
 
 @dataclass
 class GolfShotSummary:
+    """Human-readable summary derived from a sequence of golf actions."""
+
     position: str = "Center"
     aim: str = "Straight"
     power: int = 0
@@ -76,6 +80,7 @@ class GolfShotSummary:
 
 
 def load_actions(path: str) -> list[GolfActionCommand]:
+    """Load a custom golf-action JSON file into a list of commands."""
     with open(path, encoding="utf-8") as f:
         raw = json.load(f)
     if not isinstance(raw, list):
@@ -108,6 +113,7 @@ def shot_summary(actions: list[GolfActionCommand]) -> GolfShotSummary:
 
 
 def count_executable_actions(actions: list[GolfActionCommand]) -> int:
+    """Return the number of actions that will actually execute (excluding tee-spot moves)."""
     return sum(1 for a in actions if a.action not in _SKIPPED)
 
 

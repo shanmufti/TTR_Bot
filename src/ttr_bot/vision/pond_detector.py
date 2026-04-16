@@ -13,6 +13,8 @@ from ttr_bot.vision.color_matcher import build_water_mask
 
 
 class PondArea(NamedTuple):
+    """Axis-aligned bounding rectangle of the detected pond water."""
+
     x: int
     y: int
     width: int

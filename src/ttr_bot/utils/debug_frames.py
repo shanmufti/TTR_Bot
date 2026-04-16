@@ -25,18 +25,21 @@ _session_dir: Path | None = None
 
 
 def enable() -> None:
+    """Turn on debug-frame saving for the current process."""
     global _enabled
     with _lock:
         _enabled = True
 
 
 def disable() -> None:
+    """Turn off debug-frame saving."""
     global _enabled
     with _lock:
         _enabled = False
 
 
 def is_enabled() -> bool:
+    """Return True if debug-frame saving is active."""
     return _enabled
 
 

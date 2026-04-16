@@ -8,6 +8,7 @@ from ttr_bot.utils.logger import log
 
 
 def main() -> None:
+    """Launch the TTR Bot GUI (macOS only)."""
     if platform.system() != "Darwin":
         log.error("This bot only runs on macOS.")
         sys.exit(1)

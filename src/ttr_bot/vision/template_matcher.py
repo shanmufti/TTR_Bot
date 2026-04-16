@@ -18,8 +18,10 @@ from ttr_bot.utils.logger import log
 
 
 class MatchResult(NamedTuple):
-    x: int  # center x of the match (window-relative)
-    y: int  # center y of the match (window-relative)
+    """A single template match: position, confidence, and size."""
+
+    x: int
+    y: int
     confidence: float
     width: int
     height: int
@@ -441,10 +443,12 @@ _default = TemplateMatcher()
 
 
 def clear_cache() -> None:
+    """Flush the template image cache in the default matcher."""
     _default.clear_cache()
 
 
 def calibrate_scale(frame_bgr: np.ndarray) -> float:
+    """Auto-detect the UI scale from a game screenshot."""
     return _default.calibrate_scale(frame_bgr)
 
 
@@ -453,6 +457,7 @@ def find_template(
     template_name: str,
     threshold: float = settings.TEMPLATE_MATCH_THRESHOLD,
 ) -> MatchResult | None:
+    """Return the best match for *template_name*, or ``None`` if below *threshold*."""
     return _default.find_template(frame_bgr, template_name, threshold)
 
 
@@ -461,12 +466,15 @@ def find_all_templates(
     template_name: str,
     threshold: float = settings.TEMPLATE_MATCH_THRESHOLD,
 ) -> list[MatchResult]:
+    """Return all non-overlapping matches for *template_name* above *threshold*."""
     return _default.find_all_templates(frame_bgr, template_name, threshold)
 
 
 def is_element_visible(frame_bgr: np.ndarray, template_name: str) -> bool:
+    """Quick boolean check: is *template_name* visible in the frame?"""
     return _default.is_element_visible(frame_bgr, template_name)
 
 
 def save_template(name: str, image: np.ndarray) -> str:
+    """Write *image* as a new template PNG and return the file path."""
     return _default.save_template(name, image)

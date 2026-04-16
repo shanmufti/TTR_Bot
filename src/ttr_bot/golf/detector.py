@@ -34,6 +34,7 @@ def list_action_stems() -> list[str]:
 
 
 def action_file_exists(stem: str) -> bool:
+    """Return True if a JSON action file for *stem* exists on disk."""
     import os
 
     path = os.path.join(settings.GOLF_ACTIONS_DIR, f"{stem}.json")
@@ -41,6 +42,7 @@ def action_file_exists(stem: str) -> bool:
 
 
 def path_for_stem(stem: str) -> str:
+    """Return the full filesystem path for a golf action *stem*."""
     import os
 
     return os.path.join(settings.GOLF_ACTIONS_DIR, f"{stem}.json")
@@ -149,6 +151,7 @@ def detect_turn_timer_by_color(frame: np.ndarray) -> bool:
 
 
 def is_ready_to_swing(frame: np.ndarray) -> bool:
+    """Return True if the golf swing power-meter UI is on screen."""
     from ttr_bot.vision.template_matcher import _default as tm_instance
     from ttr_bot.vision.template_matcher import find_template
 
@@ -165,6 +168,7 @@ def _click_window_center(win: WindowInfo, x: int, y: int) -> None:
 
 
 def click_template_or_none(template_name: str, threshold: float = 0.75) -> bool:
+    """Click a template if visible; return True on success."""
     win = find_ttr_window()
     if win is None:
         return False

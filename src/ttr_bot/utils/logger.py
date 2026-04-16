@@ -1,3 +1,5 @@
+"""Logging configuration: rotating file + console handler."""
+
 import logging
 import os
 import sys
@@ -22,6 +24,7 @@ def _prune_old_logs(log_dir: str) -> None:
 
 
 def get_logger() -> logging.Logger:
+    """Return the singleton ``ttr_bot`` logger, creating it on first call."""
     global _logger
     if _logger is not None:
         return _logger

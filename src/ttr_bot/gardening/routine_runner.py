@@ -23,6 +23,8 @@ from ttr_bot.utils.logger import log
 
 @dataclass
 class RoutineProgress:
+    """Live progress snapshot sent to the UI during a sweep routine."""
+
     current_bed: int = 0
     total_beds: int = 0
     flowers_planted: int = 0

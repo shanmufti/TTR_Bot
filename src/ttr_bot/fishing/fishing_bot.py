@@ -26,6 +26,8 @@ from ttr_bot.vision.template_matcher import find_template
 
 @dataclass
 class FishingStats:
+    """Running counters for a single fishing session."""
+
     casts: int = 0
     caught: int = 0
     missed: int = 0
@@ -34,6 +36,8 @@ class FishingStats:
 
 @dataclass
 class FishingConfig:
+    """User-adjustable parameters for a fishing run."""
+
     max_casts: int = settings.DEFAULT_CASTS
     bite_timeout: float = settings.BITE_TIMEOUT_S
 

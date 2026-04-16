@@ -44,6 +44,8 @@ _ARROW_KEYS = ("up", "down", "left", "right")
 
 @dataclass
 class SweepResult:
+    """Summary returned after one full garden sweep pass."""
+
     beds_visited: int = 0
     beds_planted: int = 0
     beds_watered: int = 0

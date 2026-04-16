@@ -19,6 +19,8 @@ from ttr_bot.vision.pond_detector import PondArea
 
 
 class FishCandidate(NamedTuple):
+    """A detected fish shadow with its position, size, and ranking score."""
+
     cx: int
     cy: int
     size: int
@@ -124,6 +126,7 @@ def detect_fish_shadows(
     pond: PondArea,
     avg_water_bright: int = 100,
 ) -> list[FishCandidate]:
+    """Find dark-oval blobs (fish shadows) inside the pond region."""
     if pond.empty:
         return []
 

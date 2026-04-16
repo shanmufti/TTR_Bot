@@ -36,6 +36,8 @@ _HEARTBEAT_POLLS = 30  # log a heartbeat every ~9 s of silence
 
 @dataclass
 class WatcherResult:
+    """Summary returned after a garden-watcher session ends."""
+
     beds_actioned: int = 0
     beds_picked: int = 0
     beds_planted: int = 0

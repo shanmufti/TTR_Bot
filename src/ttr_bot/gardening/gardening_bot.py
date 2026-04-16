@@ -23,6 +23,8 @@ from ttr_bot.vision.template_matcher import find_template, is_element_visible
 
 @dataclass
 class GardeningStats:
+    """Running counters for a gardening session."""
+
     flowers_planted: int = 0
     waters_done: int = 0
     current_action: str = ""

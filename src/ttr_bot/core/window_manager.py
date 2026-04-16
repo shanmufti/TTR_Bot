@@ -13,6 +13,8 @@ from ttr_bot.utils.logger import log
 
 
 class WindowInfo(NamedTuple):
+    """Snapshot of a macOS window's position and size."""
+
     window_id: int
     pid: int
     x: int

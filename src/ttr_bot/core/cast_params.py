@@ -19,6 +19,8 @@ _PARAMS_FILE = os.path.join(
 
 @dataclass
 class CastParams:
+    """Tuned power/aim curve constants persisted to JSON between sessions."""
+
     power_base: float = 6.8
     aim_base: float = 3.0
     aim_base_right: float | None = None
