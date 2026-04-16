@@ -1,4 +1,12 @@
-"""All configurable thresholds, delays, and defaults for the TTR bot."""
+"""All configurable thresholds, delays, and defaults for the TTR bot.
+
+Values can be overridden by placing a ``config.toml`` file next to
+this package (i.e. at ``<project>/data/config.toml``).  Only the keys
+present in the TOML file are patched; everything else keeps the
+defaults defined below.
+"""
+
+from __future__ import annotations
 
 import os
 from pathlib import Path
@@ -136,3 +144,48 @@ SWEEP_POST_INTERACT_WALK_S = 0.6  # walk-away time after interacting with a bed
 GOLF_SCAN_INTERVAL_S = 2.0
 GOLF_PRE_SWING_DELAY_S = 1.5
 GOLF_BETWEEN_HOLES_DELAY_S = 3.0
+
+# ---------------------------------------------------------------------------
+# Optional user overrides from config.toml
+# ---------------------------------------------------------------------------
+_CONFIG_PATH = os.path.join(DATA_DIR, "config.toml")
+
+
+def _apply_toml_overrides() -> None:
+    """Patch module globals from ``data/config.toml`` if it exists."""
+    if not os.path.isfile(_CONFIG_PATH):
+        return
+
+    import tomllib
+
+    with open(_CONFIG_PATH, "rb") as f:
+        user_cfg = tomllib.load(f)
+
+    this_module = globals()
+    applied = 0
+    for section in user_cfg.values() if isinstance(user_cfg, dict) else []:
+        if not isinstance(section, dict):
+            continue
+        for key, value in section.items():
+            upper = key.upper()
+            if upper in this_module:
+                this_module[upper] = type(this_module[upper])(value)
+                applied += 1
+
+    # Also handle flat top-level keys
+    for key, value in user_cfg.items():
+        if not isinstance(value, dict):
+            upper = key.upper()
+            if upper in this_module:
+                this_module[upper] = type(this_module[upper])(value)
+                applied += 1
+
+    if applied:
+        import logging
+
+        logging.getLogger("ttr_bot").info(
+            "Applied %d setting override(s) from %s", applied, _CONFIG_PATH
+        )
+
+
+_apply_toml_overrides()
