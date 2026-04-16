@@ -5,8 +5,6 @@ Ported from FishShadowAnalyzer.HasBubblesAbove in the reference C# bot,
 rewritten with vectorized numpy ops for speed.
 """
 
-from __future__ import annotations
-
 import numpy as np
 
 from ttr_bot.config import settings

@@ -4,8 +4,6 @@ All bed detection and state classification goes through here so template
 matching and thresholds stay consistent.
 """
 
-from __future__ import annotations
-
 import time
 
 from ttr_bot.utils.logger import log

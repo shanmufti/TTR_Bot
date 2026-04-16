@@ -1,7 +1,5 @@
 """Tests for the water / shadow color detection module."""
 
-from __future__ import annotations
-
 import numpy as np
 
 from ttr_bot.vision.color_matcher import (

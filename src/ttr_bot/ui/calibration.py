@@ -1,7 +1,5 @@
 """Calibration — detect and lock TTR window bounds."""
 
-from __future__ import annotations
-
 from typing import NamedTuple
 
 

@@ -1,7 +1,5 @@
 """Orchestrates golf: auto course detection + JSON action replay."""
 
-from __future__ import annotations
-
 import threading
 import time
 from collections.abc import Callable

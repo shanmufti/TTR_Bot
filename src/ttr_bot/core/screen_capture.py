@@ -1,7 +1,5 @@
 """macOS screen capture using Quartz CGWindowListCreateImage."""
 
-from __future__ import annotations
-
 import CoreFoundation
 import numpy as np
 import Quartz

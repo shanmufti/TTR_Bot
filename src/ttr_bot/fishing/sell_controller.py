@@ -4,8 +4,6 @@ The sell/walk navigation has been removed.  Only the path-listing
 helpers remain so the data/sell_paths/ directory is still loadable.
 """
 
-from __future__ import annotations
-
 import json
 import os
 

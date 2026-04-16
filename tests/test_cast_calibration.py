@@ -1,7 +1,5 @@
 """Tests for the cast calibration transform math."""
 
-from __future__ import annotations
-
 import numpy as np
 import pytest
 

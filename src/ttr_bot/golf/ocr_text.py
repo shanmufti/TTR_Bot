@@ -1,7 +1,5 @@
 """Optional OCR for golf course name detection (pytesseract + system tesseract)."""
 
-from __future__ import annotations
-
 import numpy as np
 
 from ttr_bot.utils.logger import log

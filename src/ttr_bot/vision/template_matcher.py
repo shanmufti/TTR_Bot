@@ -3,8 +3,6 @@
 Ported from ImageTemplateMatcher.cs / UIElementManager.cs in the reference bot.
 """
 
-from __future__ import annotations
-
 import os
 import threading
 import time

@@ -1,7 +1,5 @@
 """Input simulation for TTR on macOS using pyautogui."""
 
-from __future__ import annotations
-
 import math
 import time
 

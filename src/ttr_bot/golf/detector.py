@@ -1,7 +1,5 @@
 """Golf course detection and 'ready to swing' — templates + optional OCR + color heuristics."""
 
-from __future__ import annotations
-
 import time
 from collections.abc import Callable
 from time import perf_counter

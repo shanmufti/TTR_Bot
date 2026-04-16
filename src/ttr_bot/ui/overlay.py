@@ -1,7 +1,5 @@
 """Translucent stats overlay window for fishing progress."""
 
-from __future__ import annotations
-
 import contextlib
 import tkinter as tk
 

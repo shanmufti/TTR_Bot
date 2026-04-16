@@ -10,8 +10,6 @@ After each action the watcher resumes polling so the player can walk to
 the next bed.
 """
 
-from __future__ import annotations
-
 import contextlib
 import os
 import threading

@@ -15,8 +15,6 @@ Navigation approach:
 6.  If no flowers are visible, rotate slowly until some come into view.
 """
 
-from __future__ import annotations
-
 import contextlib
 import os
 import threading

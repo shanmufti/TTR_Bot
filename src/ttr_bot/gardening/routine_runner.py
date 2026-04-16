@@ -5,8 +5,6 @@ is handled by GardenBot.  This module wires up the sweeper, validates
 the flower selection, and relays progress / status to the UI.
 """
 
-from __future__ import annotations
-
 import contextlib
 import threading
 from collections.abc import Callable

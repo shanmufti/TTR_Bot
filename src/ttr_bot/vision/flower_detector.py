@@ -8,8 +8,6 @@ The main entry point is :func:`scan_for_flowers` which returns a list
 of :class:`FlowerBlob` sorted nearest-first (lowest on screen = closest).
 """
 
-from __future__ import annotations
-
 from typing import NamedTuple
 
 import cv2

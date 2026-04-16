@@ -1,7 +1,5 @@
 """Water and fish-shadow color detection for TTR ponds."""
 
-from __future__ import annotations
-
 import cv2
 import numpy as np
 

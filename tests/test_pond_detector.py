@@ -1,7 +1,5 @@
 """Tests for the pond detection module."""
 
-from __future__ import annotations
-
 import numpy as np
 
 from ttr_bot.vision.pond_detector import EMPTY_POND, PondArea, detect_pond

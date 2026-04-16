@@ -4,8 +4,6 @@ All bot-specific errors derive from ``TTRBotError`` so callers can
 catch the full family with a single ``except TTRBotError`` clause.
 """
 
-from __future__ import annotations
-
 
 class TTRBotError(Exception):
     """Base class for all TTR Bot errors."""

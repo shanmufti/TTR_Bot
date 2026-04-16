@@ -1,7 +1,5 @@
 """Shared fixtures for TTR Bot tests."""
 
-from __future__ import annotations
-
 import numpy as np
 import pytest
 

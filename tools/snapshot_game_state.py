@@ -9,8 +9,6 @@ Usage:
     uv run python tools/snapshot_game_state.py --promote-template
 """
 
-from __future__ import annotations
-
 import argparse
 import os
 import sys

@@ -1,7 +1,5 @@
 """Maps on-screen / OCR course names to Custom Golf Actions JSON stem names."""
 
-from __future__ import annotations
-
 # Keys: substrings expected in scoreboard or HUD text.
 # Values: filename stem under golf_actions/ (without .json).
 COURSE_NAME_TO_FILE: dict[str, str] = {

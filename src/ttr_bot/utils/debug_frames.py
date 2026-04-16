@@ -5,8 +5,6 @@ Enable by setting the env var ``TTR_DEBUG_FRAMES=1`` or calling
 timestamps so they can be reviewed after a session.
 """
 
-from __future__ import annotations
-
 import os
 import threading
 import time

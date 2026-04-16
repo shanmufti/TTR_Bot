@@ -1,7 +1,5 @@
 """macOS Quartz-based window manager for Toontown Rewritten."""
 
-from __future__ import annotations
-
 import threading
 from typing import NamedTuple
 

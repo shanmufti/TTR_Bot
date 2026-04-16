@@ -4,8 +4,6 @@ Shared by core.input_controller (consumer) and fishing.cast_recorder
 (producer) to avoid a core -> fishing dependency cycle.
 """
 
-from __future__ import annotations
-
 import json
 import os
 from dataclasses import asdict, dataclass
@@ -33,7 +31,7 @@ class CastParams:
         log.info("Cast params saved to %s", _PARAMS_FILE)
 
     @staticmethod
-    def load() -> CastParams | None:
+    def load() -> "CastParams | None":
         if not os.path.isfile(_PARAMS_FILE):
             return None
         try:

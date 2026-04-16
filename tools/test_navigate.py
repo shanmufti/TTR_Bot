@@ -8,8 +8,6 @@ Usage:
     python test_navigate.py --from 3 --to 4 --map gardening_routines/garden_map.json
 """
 
-from __future__ import annotations
-
 import argparse
 import os
 import threading

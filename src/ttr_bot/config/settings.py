@@ -6,8 +6,6 @@ present in the TOML file are patched; everything else keeps the
 defaults defined below.
 """
 
-from __future__ import annotations
-
 import os
 from pathlib import Path
 

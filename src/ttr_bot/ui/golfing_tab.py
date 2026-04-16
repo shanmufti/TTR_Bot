@@ -1,7 +1,5 @@
 """Golfing tab — custom JSON replay + auto round (ported from Toontown-Rewritten-Bot)."""
 
-from __future__ import annotations
-
 import os
 import threading
 import tkinter as tk

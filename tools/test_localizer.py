@@ -9,8 +9,6 @@ Usage:
     python test_localizer.py [--map gardening_routines/garden_map.json] [--gui]
 """
 
-from __future__ import annotations
-
 import argparse
 import os
 import threading

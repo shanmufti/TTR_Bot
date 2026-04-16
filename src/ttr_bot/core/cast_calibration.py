@@ -5,8 +5,6 @@ lands via frame differencing, and fits a linear transform that maps
 (shadow_offset in retina px) → (drag_vector in screen px).
 """
 
-from __future__ import annotations
-
 import json
 import os
 from typing import NamedTuple

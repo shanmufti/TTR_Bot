@@ -4,8 +4,6 @@ Assumes the toon is already sitting on a fishing dock with the red
 cast button visible.  No sell trips, no walking — just fishing.
 """
 
-from __future__ import annotations
-
 import contextlib
 import threading
 import time

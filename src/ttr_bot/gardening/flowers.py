@@ -4,8 +4,6 @@ Each flower is defined by a jellybean sequence string where each character
 represents a bean color.  Flowers are grouped by the number of beans required.
 """
 
-from __future__ import annotations
-
 BEAN_COLORS: dict[str, tuple[str, str]] = {
     "r": ("Red", "#e74c3c"),
     "g": ("Green", "#2ecc71"),

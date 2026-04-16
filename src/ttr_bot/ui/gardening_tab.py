@@ -1,7 +1,5 @@
 """Gardening tab UI for the TTR Bot."""
 
-from __future__ import annotations
-
 import tkinter as tk
 from collections.abc import Callable
 from tkinter import ttk

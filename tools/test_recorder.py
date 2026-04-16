@@ -7,8 +7,6 @@ Usage:
     python test_recorder.py [--seconds 60]
 """
 
-from __future__ import annotations
-
 import argparse
 import signal
 import time

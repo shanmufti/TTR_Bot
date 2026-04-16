@@ -1,7 +1,5 @@
 """Dynamic pond area detection from a game screenshot."""
 
-from __future__ import annotations
-
 from typing import NamedTuple
 
 import cv2

@@ -4,8 +4,6 @@ Detects dark oval blobs in the pond water, scores them, and picks the best
 target to cast at.
 """
 
-from __future__ import annotations
-
 import math
 from typing import NamedTuple
 

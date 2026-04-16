@@ -1,7 +1,5 @@
 """Tests for the flower database module."""
 
-from __future__ import annotations
-
 from ttr_bot.gardening.flowers import (
     BEAN_CHAR_TO_TEMPLATE,
     BEAN_COLORS,

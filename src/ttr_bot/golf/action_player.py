@@ -1,7 +1,5 @@
 """Load and execute Custom Golf Actions JSON (compatible with the C# bot format)."""
 
-from __future__ import annotations
-
 import json
 import os
 import threading
@@ -9,6 +7,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from time import perf_counter
+from typing import Self
 
 import pyautogui
 
@@ -37,7 +36,7 @@ class GolfActionCommand:
     command: str = ""
 
     @classmethod
-    def from_dict(cls, d: dict) -> GolfActionCommand:
+    def from_dict(cls, d: dict) -> Self:
         return cls(
             action=str(d.get("Action", d.get("action", ""))),
             duration=int(d.get("Duration", d.get("duration", 0))),

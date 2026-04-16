@@ -5,8 +5,6 @@ positions before the cast, and the bobber landing position.  After
 recording, fit_cast_params() derives power/aim curve constants.
 """
 
-from __future__ import annotations
-
 import contextlib
 import math
 import threading

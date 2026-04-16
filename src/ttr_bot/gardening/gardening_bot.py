@@ -4,8 +4,6 @@ Follows the same threading / callback pattern as fishing_bot.FishingBot.
 All clicks go through input_controller.click() which handles Retina scaling.
 """
 
-from __future__ import annotations
-
 import contextlib
 import threading
 import time
