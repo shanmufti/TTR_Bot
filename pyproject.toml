@@ -33,12 +33,16 @@ line-length = 99
 
 [tool.ruff.lint]
 select = [
-    "E", "F", "W", "I", "UP", "B", "SIM", "RUF",     # existing
-    "N", "A", "C4", "S", "RET", "PIE", "PERF",         # new: naming, security, returns, perf
-    "FURB", "TRY", "ERA", "T20",                        # new: modernize, exceptions, print
-    "PLE", "PLW", "PLR",                                # pylint: errors, warnings, refactor
+    "E", "F", "W", "I", "UP", "B", "SIM", "RUF",
+    "C901", "C4",                                        # mccabe complexity, comprehensions
+    "N", "A", "S", "RET", "PIE", "PERF",                # naming, security, returns, perf
+    "FURB", "TRY", "ERA", "T20",                         # modernize, exceptions, print
+    "PLE", "PLW", "PLR",                                 # pylint: errors, warnings, refactor
 ]
 ignore = []
+
+[tool.ruff.lint.mccabe]
+max-complexity = 9
 
 [tool.ruff.lint.per-file-ignores]
 "tools/*" = ["T201"]          # print is expected in CLI tools

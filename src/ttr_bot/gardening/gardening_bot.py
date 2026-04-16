@@ -135,28 +135,10 @@ class GardenBot:
                 if self._stop_event.is_set():
                     break
 
-                label = f"[{i + 1}/{len(actions)}]"
-
-                if action.action == "plant":
-                    self._notify_status(f"{label} Planting {action.flower_name}…")
-                    self.stats.current_action = f"Planting {action.flower_name}"
-                    self._notify_stats()
-                    ok = self.plant_flower(action.flower_name, action.bean_sequence)
-                    if ok:
-                        self.stats.flowers_planted += 1
-                        self._notify_stats()
-                    else:
-                        self._finish(f"Plant failed: {action.flower_name}")
-                        return
-
-                elif action.action == "water":
-                    self._notify_status(f"{label} Watering x{action.water_count}...")
-                    self.stats.current_action = f"Watering x{action.water_count}"
-                    self._notify_stats()
-                    ok = self.water_plant(action.water_count)
-                    if not ok:
-                        self._finish("Water failed: button not found")
-                        return
+                err = self._execute_action(action, f"[{i + 1}/{len(actions)}]")
+                if err is not None:
+                    self._finish(err)
+                    return
 
             reason = "User stopped" if self._stop_event.is_set() else "Completed"
             self._finish(reason)
@@ -164,6 +146,24 @@ class GardenBot:
         except Exception as exc:
             log.exception("Gardening loop crashed")
             self._finish(f"Error: {exc}")
+
+    def _execute_action(self, action: GardenAction, label: str) -> str | None:
+        """Run one garden action. Returns an error message on failure, None on success."""
+        if action.action == "plant":
+            self._notify_status(f"{label} Planting {action.flower_name}...")
+            self.stats.current_action = f"Planting {action.flower_name}"
+            self._notify_stats()
+            if not self.plant_flower(action.flower_name, action.bean_sequence):
+                return f"Plant failed: {action.flower_name}"
+            self.stats.flowers_planted += 1
+            self._notify_stats()
+        elif action.action == "water":
+            self._notify_status(f"{label} Watering x{action.water_count}...")
+            self.stats.current_action = f"Watering x{action.water_count}"
+            self._notify_stats()
+            if not self.water_plant(action.water_count):
+                return "Water failed: button not found"
+        return None
 
     # ------------------------------------------------------------------
     # Core gardening operations

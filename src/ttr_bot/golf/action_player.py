@@ -149,6 +149,35 @@ def _hold_key(key: str, seconds: float, stop_event: threading.Event) -> bool:
     return False
 
 
+def _execute_step(
+    cmd: GolfActionCommand,
+    stop_event: threading.Event,
+    t_replay: float,
+) -> bool:
+    """Execute a single golf action. Returns True if replay should abort."""
+    t_step = perf_counter()
+    if cmd.action == "DELAY TIME":
+        if _interruptible_delay(cmd.duration / 1000.0, stop_event):
+            return True
+        log.info("Golf [replay] — DELAY TIME done in %.2fs", perf_counter() - t_step)
+        return False
+
+    key = _ACTION_KEYS.get(cmd.action)
+    if key is None:
+        log.error("Unsupported golf action: %s", cmd.action)
+        return True
+
+    if _hold_key(key, cmd.duration / 1000.0, stop_event):
+        return True
+    log.info(
+        "Golf [replay] — key %s held %.2fs (step wall %.2fs)",
+        key,
+        cmd.duration / 1000.0,
+        perf_counter() - t_step,
+    )
+    return False
+
+
 def perform_golf_actions(
     file_path: str,
     stop_event: threading.Event,
@@ -184,7 +213,6 @@ def perform_golf_actions(
         if on_step:
             on_step(step_i, total, cmd.action, next_label, cmd.duration)
 
-        t_step = perf_counter()
         log.info(
             "Golf [replay] — step %d/%d %s duration_ms=%d (next: %s, +%.2fs in replay)",
             step_i,
@@ -192,27 +220,10 @@ def perform_golf_actions(
             cmd.action,
             cmd.duration,
             next_label,
-            t_step - t_replay,
+            perf_counter() - t_replay,
         )
 
-        if cmd.action == "DELAY TIME":
-            if _interruptible_delay(cmd.duration / 1000.0, stop_event):
-                return
-            log.info("Golf [replay] — DELAY TIME done in %.2fs", perf_counter() - t_step)
-            continue
-
-        key = _ACTION_KEYS.get(cmd.action)
-        if key is None:
-            log.error("Unsupported golf action: %s", cmd.action)
+        if _execute_step(cmd, stop_event, t_replay):
             return
-
-        if _hold_key(key, cmd.duration / 1000.0, stop_event):
-            return
-        log.info(
-            "Golf [replay] — key %s held %.2fs (step wall %.2fs)",
-            key,
-            cmd.duration / 1000.0,
-            perf_counter() - t_step,
-        )
 
     log.info("Golf [replay] — completed %s in %.1fs", file_path, perf_counter() - t_replay)

@@ -18,6 +18,34 @@ _CONF_LOW = 0.48
 TEMPLATES_TO_CHECK = list(dict.fromkeys([*_CALIBRATION_ANCHORS, "red_fishing_button"]))
 
 
+def _scan_template(name: str, frame: np.ndarray) -> tuple | None:
+    """Match one template across scales.
+
+    Returns ``(best_val, best_scale, best_loc, best_size, name)`` or None.
+    """
+    tmpl = _load_template(name)
+    if tmpl is None:
+        print(f"  {name:30s}  MISSING")
+        return None
+
+    fh, fw = frame.shape[:2]
+    best_val, best_scale, best_loc, best_size = -1.0, 1.0, (0, 0), (0, 0)
+    for scale in SCALES:
+        new_w = int(tmpl.shape[1] * scale)
+        new_h = int(tmpl.shape[0] * scale)
+        if new_w < _MIN_TEMPLATE_DIM or new_h < _MIN_TEMPLATE_DIM or new_w > fw or new_h > fh:
+            continue
+        scaled = cv2.resize(tmpl, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+        result = cv2.matchTemplate(frame, scaled, cv2.TM_CCOEFF_NORMED)
+        _, max_val, _, max_loc = cv2.minMaxLoc(result)
+        if max_val > best_val:
+            best_val, best_scale, best_loc, best_size = max_val, scale, max_loc, (new_w, new_h)
+
+    status = "OK" if best_val >= _CONF_GOOD else "LOW" if best_val >= _CONF_LOW else "FAIL"
+    print(f"  {name:30s}  conf={best_val:.3f}  scale={best_scale:.2f}  at={best_loc}  [{status}]")
+    return (best_val, best_scale, best_loc, best_size, name)
+
+
 def main() -> None:
     win = find_ttr_window()
     if win is None:
@@ -31,52 +59,26 @@ def main() -> None:
         return
     print(f"Frame: {frame.shape[1]}x{frame.shape[0]} (retina)\n")
 
-    out_path = f"{settings.DATA_DIR}/_debug/template_diag.png"
-
     annotations = []
-
     for name in TEMPLATES_TO_CHECK:
-        tmpl = _load_template(name)
-        if tmpl is None:
-            print(f"  {name:30s}  MISSING")
+        hit = _scan_template(name, frame)
+        if hit is None:
             continue
-
-        best_val, best_scale, best_loc = -1.0, 1.0, (0, 0)
-        for scale in SCALES:
-            th, tw = tmpl.shape[:2]
-            new_w = int(tw * scale)
-            new_h = int(th * scale)
-            fh, fw = frame.shape[:2]
-            if new_w < _MIN_TEMPLATE_DIM or new_h < _MIN_TEMPLATE_DIM or new_w > fw or new_h > fh:
-                continue
-            scaled = cv2.resize(tmpl, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
-            result = cv2.matchTemplate(frame, scaled, cv2.TM_CCOEFF_NORMED)
-            _, max_val, _, max_loc = cv2.minMaxLoc(result)
-            if max_val > best_val:
-                best_val = max_val
-                best_scale = scale
-                best_loc = max_loc
-                best_size = (new_w, new_h)
-
-        status = "OK" if best_val >= _CONF_GOOD else "LOW" if best_val >= _CONF_LOW else "FAIL"
-        print(
-            f"  {name:30s}  conf={best_val:.3f}  scale={best_scale:.2f}  at={best_loc}  [{status}]"
-        )
-
+        best_val, _scale, best_loc, best_size, tmpl_name = hit
         if best_val >= _CONF_LOW:
             cx = best_loc[0] + best_size[0] // 2
             cy = best_loc[1] + best_size[1] // 2
             color = (0, 255, 0) if best_val >= _CONF_GOOD else (0, 165, 255)
-            annotations.append((cx, cy, best_size[0], best_size[1], name, best_val, color))
+            annotations.append((cx, cy, best_size[0], best_size[1], tmpl_name, best_val, color))
 
     out = frame.copy()
-    for cx, cy, w, h, name, conf, color in annotations:
+    for cx, cy, w, h, tmpl_name, conf, color in annotations:
         pt1 = (cx - w // 2, cy - h // 2)
         pt2 = (cx + w // 2, cy + h // 2)
         cv2.rectangle(out, pt1, pt2, color, 2)
         cv2.putText(
             out,
-            f"{name} {conf:.2f}",
+            f"{tmpl_name} {conf:.2f}",
             (pt1[0], pt1[1] - 8),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.5,
@@ -86,6 +88,7 @@ def main() -> None:
 
     import os
 
+    out_path = f"{settings.DATA_DIR}/_debug/template_diag.png"
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     cv2.imwrite(out_path, out)
     print(f"\nAnnotated frame saved: {out_path}")
