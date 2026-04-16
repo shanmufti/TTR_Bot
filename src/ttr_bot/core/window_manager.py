@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from typing import NamedTuple
 
 import Quartz
@@ -20,6 +21,7 @@ class WindowInfo(NamedTuple):
     height: int
 
 
+_lock = threading.Lock()
 _calibrated_bounds: dict | None = None
 
 
@@ -38,14 +40,15 @@ def set_calibrated_bounds(
     open.
     """
     global _calibrated_bounds
-    _calibrated_bounds = {
-        "x": x,
-        "y": y,
-        "width": width,
-        "height": height,
-        "window_id": window_id,
-        "pid": pid,
-    }
+    with _lock:
+        _calibrated_bounds = {
+            "x": x,
+            "y": y,
+            "width": width,
+            "height": height,
+            "window_id": window_id,
+            "pid": pid,
+        }
     log.info(
         "Window bounds locked: %dx%d at (%d,%d)  wid=%s pid=%s",
         width,
@@ -60,7 +63,8 @@ def set_calibrated_bounds(
 def clear_calibrated_bounds() -> None:
     """Remove calibrated bounds, revert to auto-detection."""
     global _calibrated_bounds
-    _calibrated_bounds = None
+    with _lock:
+        _calibrated_bounds = None
 
 
 def find_ttr_window() -> WindowInfo | None:

@@ -8,6 +8,7 @@ timestamps so they can be reviewed after a session.
 from __future__ import annotations
 
 import os
+import threading
 import time
 from pathlib import Path
 
@@ -17,6 +18,7 @@ import numpy as np
 from ttr_bot.config import settings
 from ttr_bot.utils.logger import log
 
+_lock = threading.Lock()
 _enabled = os.environ.get("TTR_DEBUG_FRAMES", "0") == "1"
 _debug_dir = Path(settings.DATA_DIR) / "_debug" / "fishing"
 _session_dir: Path | None = None
@@ -24,12 +26,14 @@ _session_dir: Path | None = None
 
 def enable() -> None:
     global _enabled
-    _enabled = True
+    with _lock:
+        _enabled = True
 
 
 def disable() -> None:
     global _enabled
-    _enabled = False
+    with _lock:
+        _enabled = False
 
 
 def is_enabled() -> bool:
