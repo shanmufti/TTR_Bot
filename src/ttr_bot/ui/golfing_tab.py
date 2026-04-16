@@ -214,11 +214,10 @@ class GolfingTab:
         self._summary.config(state="disabled")
 
     def _ensure_calibrated(self) -> bool:
-        from ttr_bot.vision import template_matcher as tm
+        from ttr_bot.vision.template_matcher import _default as tm_instance
 
         self._calibrate_fn()
-        # Must read via module — `from tm import _global_scale` would be a stale snapshot.
-        if tm._global_scale is None:
+        if tm_instance.scale is None:
             log.warning("Golf: calibration failed")
             self._status_var.set("Calibration failed — show game UI first")
             return False

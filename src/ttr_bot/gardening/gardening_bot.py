@@ -418,9 +418,9 @@ class GardenBot:
     def ensure_calibrated(self) -> bool:
         """Verify scale calibration is set, running it if needed."""
         from ttr_bot.core.window_manager import set_calibrated_bounds
-        from ttr_bot.vision import template_matcher as tm
+        from ttr_bot.vision.template_matcher import _default as tm_instance
 
-        if tm._global_scale is not None:
+        if tm_instance.scale is not None:
             return True
 
         self._notify_status("Calibrating…")
@@ -438,7 +438,9 @@ class GardenBot:
             log.warning("Calibration failed: could not capture frame")
             return False
 
-        scale = tm.calibrate_scale(frame)
+        from ttr_bot.vision.template_matcher import calibrate_scale
+
+        scale = calibrate_scale(frame)
         if scale < 0:
             log.warning("Calibration failed: no anchor template found")
             return False
