@@ -18,8 +18,7 @@ from ttr_bot.gardening.demo_recorder import DemoRecorder
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Test demo recorder")
-    parser.add_argument("--seconds", type=int, default=60,
-                        help="Recording duration (default 60)")
+    parser.add_argument("--seconds", type=int, default=60, help="Recording duration (default 60)")
     args = parser.parse_args()
 
     recorder = DemoRecorder()
@@ -32,6 +31,7 @@ def main() -> None:
 
     def _sigint(sig, frame):
         pass
+
     signal.signal(signal.SIGINT, _sigint)
 
     try:
@@ -56,8 +56,10 @@ def main() -> None:
 
         events = summary.get("keyboard_events", 0)
         presses = summary.get("keyboard_presses", 0)
-        print(f"  Key events: {events} ({presses} presses) "
-              f"{'✓' if events > 0 else '✗ (no events — walk around!)'}")
+        print(
+            f"  Key events: {events} ({presses} presses) "
+            f"{'✓' if events > 0 else '✗ (no events — walk around!)'}"
+        )
 
         frames = summary.get("frame_count", 0)
         print(f"  Frames: {frames} {'✓' if frames > 10 else '✗'}")

@@ -46,12 +46,6 @@ def _get_session_dir() -> Path:
     return _session_dir
 
 
-def _reset_session() -> None:
-    global _session_dir, _frame_counter
-    _session_dir = None
-    _frame_counter = 0
-
-
 _frame_counter = 0
 
 

@@ -14,19 +14,20 @@ import argparse
 import os
 import threading
 
-from ttr_bot.config import settings
-from ttr_bot.vision.localizer import GardenMap, GardenLocalizer
 from ttr_bot.gardening.navigator import GardenNavigator
+from ttr_bot.vision.localizer import GardenLocalizer, GardenMap
+
+from ttr_bot.config import settings
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Single-bed navigation test")
     default_map = os.path.join(settings.GARDENING_ROUTINES_DIR, "garden_map.json")
     parser.add_argument("--map", default=default_map, help="Path to garden_map.json")
-    parser.add_argument("--from", dest="from_bed", type=int, required=True,
-                        help="Starting bed number")
-    parser.add_argument("--to", dest="to_bed", type=int, required=True,
-                        help="Target bed number")
+    parser.add_argument(
+        "--from", dest="from_bed", type=int, required=True, help="Starting bed number"
+    )
+    parser.add_argument("--to", dest="to_bed", type=int, required=True, help="Target bed number")
     args = parser.parse_args()
 
     if not os.path.isfile(args.map):
@@ -37,8 +38,10 @@ def main() -> None:
     garden_map = GardenMap.load(args.map)
     localizer = GardenLocalizer(garden_map)
 
-    print(f"Map loaded: {len(garden_map.bed_nodes)} beds, "
-          f"{len(garden_map.waypoint_nodes)} waypoints\n")
+    print(
+        f"Map loaded: {len(garden_map.bed_nodes)} beds, "
+        f"{len(garden_map.waypoint_nodes)} waypoints\n"
+    )
 
     from_id = f"bed_{args.from_bed}"
     to_id = f"bed_{args.to_bed}"
@@ -69,8 +72,10 @@ def main() -> None:
     result = navigator.navigate_to_bed(to_id)
 
     print(f"\n{'─' * 50}")
-    print(f" RESULT: {'ARRIVED' if result.arrived else 'FAILED'} "
-          f"via {result.method or 'none'} ({result.duration_s:.1f}s)")
+    print(
+        f" RESULT: {'ARRIVED' if result.arrived else 'FAILED'} "
+        f"via {result.method or 'none'} ({result.duration_s:.1f}s)"
+    )
     if result.stuck_recoveries > 0:
         print(f" Stuck recoveries: {result.stuck_recoveries}")
     if result.skipped:

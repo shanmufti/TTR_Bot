@@ -38,8 +38,6 @@ class WatcherResult:
     beds_actioned: int = 0
     beds_picked: int = 0
     beds_planted: int = 0
-    beds_watered: int = 0
-    beds_skipped: int = 0
     total_time_s: float = 0.0
 
 
@@ -251,8 +249,6 @@ class GardenWatcher:
             f" Beds actioned:      {r.beds_actioned}\n"
             f" Picked:             {r.beds_picked}\n"
             f" Planted:            {r.beds_planted}\n"
-            f" Watered:            {r.beds_watered}\n"
-            f" Skipped (full):     {r.beds_skipped}\n"
             f" Time:               {int(r.total_time_s) // 60}m "
             f"{int(r.total_time_s) % 60:02d}s\n"
             f"{'═' * 44}"

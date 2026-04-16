@@ -13,14 +13,20 @@ from __future__ import annotations
 
 import argparse
 import os
-import time
 import threading
+import time
 import tkinter as tk
 
+from ttr_bot.vision.localizer import (
+    GardenLocalizer,
+    GardenMap,
+    HeadingEstimator,
+    LocalizationResult,
+)
+
 from ttr_bot.config import settings
-from ttr_bot.core.window_manager import find_ttr_window
 from ttr_bot.core.screen_capture import capture_window
-from ttr_bot.vision.localizer import GardenMap, GardenLocalizer, HeadingEstimator, LocalizationResult
+from ttr_bot.core.window_manager import find_ttr_window
 
 
 def _format_result(frame_num: int, result: LocalizationResult | None) -> str:
@@ -36,10 +42,7 @@ def _format_result(frame_num: int, result: LocalizationResult | None) -> str:
         f"conf {result.confidence:.2f})"
     )
     if result.second_best_id:
-        line += (
-            f"  |  2nd: {result.second_best_id:<12} "
-            f"(conf {result.second_best_conf:.2f})"
-        )
+        line += f"  |  2nd: {result.second_best_id:<12} (conf {result.second_best_conf:.2f})"
     line += f"  |  Pos: ({result.map_x:.0f}, {result.map_y:.0f})"
     return line
 
@@ -93,13 +96,16 @@ def _draw_map_nodes(canvas: tk.Canvas, garden_map: GardenMap) -> None:
         x, y = node.map_x, node.map_y
         canvas.create_oval(x - r, y - r, x + r, y + r, fill=color, outline="")
         if node.node_type == "bed":
-            canvas.create_text(x, y - 14, text=node.id,
-                               fill="#eaeaea", font=("Helvetica", 8))
+            canvas.create_text(x, y - 14, text=node.id, fill="#eaeaea", font=("Helvetica", 8))
 
 
 def _gui_update_loop(
-    localizer: GardenLocalizer, heading_est: HeadingEstimator,
-    root: tk.Tk, dot_id: int, info_var: tk.StringVar, canvas: tk.Canvas,
+    localizer: GardenLocalizer,
+    heading_est: HeadingEstimator,
+    root: tk.Tk,
+    dot_id: int,
+    info_var: tk.StringVar,
+    canvas: tk.Canvas,
     stop_event: threading.Event,
 ) -> None:
     """Background thread: localize and push updates to the GUI."""
@@ -112,18 +118,20 @@ def _gui_update_loop(
         result = localizer.localize(frame)
         if result is not None:
             heading = heading_est.update(result)
-            root.after(0, _gui_draw_result, canvas, dot_id,
-                       info_var, result, heading)
+            root.after(0, _gui_draw_result, canvas, dot_id, info_var, result, heading)
 
         time.sleep(settings.NAV_RECHECK_INTERVAL_MS / 1000.0)
 
 
 def _gui_draw_result(
-    canvas: tk.Canvas, dot_id: int,
-    info_var: tk.StringVar, r: LocalizationResult,
+    canvas: tk.Canvas,
+    dot_id: int,
+    info_var: tk.StringVar,
+    r: LocalizationResult,
     heading: float | None,
 ) -> None:
     import math
+
     x, y = r.map_x, r.map_y
     canvas.coords(dot_id, x - 6, y - 6, x + 6, y + 6)
 
@@ -148,14 +156,19 @@ def _run_gui(localizer: GardenLocalizer, garden_map: GardenMap) -> None:
     root.title("Localizer Test")
     root.configure(bg="#1a1a2e")
 
-    canvas = tk.Canvas(root, width=650, height=650,
-                       bg="#16213e", highlightthickness=0)
+    canvas = tk.Canvas(root, width=650, height=650, bg="#16213e", highlightthickness=0)
     canvas.pack(padx=10, pady=10)
 
     info_var = tk.StringVar(value="Waiting...")
-    tk.Label(root, textvariable=info_var, font=("Courier", 11),
-             fg="#eaeaea", bg="#1a1a2e", anchor="w", justify="left").pack(
-                 padx=10, pady=(0, 10), fill="x")
+    tk.Label(
+        root,
+        textvariable=info_var,
+        font=("Courier", 11),
+        fg="#eaeaea",
+        bg="#1a1a2e",
+        anchor="w",
+        justify="left",
+    ).pack(padx=10, pady=(0, 10), fill="x")
 
     _draw_map_nodes(canvas, garden_map)
 
@@ -196,8 +209,9 @@ def main() -> None:
     garden_map = GardenMap.load(args.map)
     localizer = GardenLocalizer(garden_map)
 
-    print(f"Loaded map: {len(garden_map.bed_nodes)} beds, "
-          f"{len(garden_map.waypoint_nodes)} waypoints")
+    print(
+        f"Loaded map: {len(garden_map.bed_nodes)} beds, {len(garden_map.waypoint_nodes)} waypoints"
+    )
 
     if args.gui:
         _run_gui(localizer, garden_map)

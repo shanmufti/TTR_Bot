@@ -296,13 +296,8 @@ class GardenSweeper:
             self._status(f"Bed #{bed_num}: planting {flower_name}")
             if self._bot._plant_flower(flower_name, bean_sequence):
                 result.beds_planted += 1
-        elif state in ("growing", "water"):
-            label = "growing — watering" if state == "growing" else "watering"
-            self._status(f"Bed #{bed_num}: {label}")
-            if self._bot._water_plant(settings.GARDEN_WATERS_AFTER_PLANT):
-                result.beds_watered += 1
-        elif state == "full":
-            self._status(f"Bed #{bed_num}: fully watered — skipping")
+        else:
+            self._status(f"Bed #{bed_num}: state={state} — skipping")
 
     def _do_pick_and_plant(
         self,
