@@ -439,7 +439,7 @@ class FishingBot:
             if has_catch_popup(frame):
                 return "caught"
 
-            # Template checks are ~3× more expensive than HSV; skip
+            # Template checks are ~3x more expensive than HSV; skip
             # some polls to keep the loop responsive for catch detection.
             if poll % 3 == 0:
                 if find_template(frame, "jellybean_exit") is not None:

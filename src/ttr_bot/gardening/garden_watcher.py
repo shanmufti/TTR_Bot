@@ -30,6 +30,7 @@ _DEBUG_DIR = os.path.join(settings.DATA_DIR, "_debug", "watcher")
 
 _POLL_INTERVAL_S = 0.3
 _HEARTBEAT_POLLS = 30  # log a heartbeat every ~9 s of silence
+_UNKNOWN_STREAK_LIMIT = 3  # unknown frames before declaring bed UI gone
 
 
 @dataclass
@@ -173,7 +174,7 @@ class GardenWatcher:
                 else:
                     unknown_streak = 0
 
-            if unknown_streak >= 3:
+            if unknown_streak >= _UNKNOWN_STREAK_LIMIT:
                 log.info("[Watcher] bed UI gone after %.0fms", (time.monotonic() - t0) * 1000)
                 return
 

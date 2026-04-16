@@ -87,9 +87,7 @@ class CastRecorder:
             self._status("TTR window not found")
             return
 
-        set_calibrated_bounds(
-            win.x, win.y, win.width, win.height, window_id=win.window_id, pid=win.pid
-        )
+        set_calibrated_bounds(win)
 
         frame = capture_window(win)
         if frame is None:
@@ -138,7 +136,7 @@ class CastRecorder:
         shadows: list[FishCandidate] = []
         before_frame = None
         mouse_buf: list[tuple[int, int]] = []
-        _BUF_SIZE = 60
+        buf_size = 60
 
         while not self._stop.is_set():
             frame = capture_window(win)
@@ -148,7 +146,7 @@ class CastRecorder:
 
             cur = pyautogui.position()
             mouse_buf.append((cur[0], cur[1]))
-            if len(mouse_buf) > _BUF_SIZE:
+            if len(mouse_buf) > buf_size:
                 mouse_buf.pop(0)
 
             btn = find_template(frame, "red_fishing_button")
@@ -207,10 +205,7 @@ class CastRecorder:
         bobber = detect_bobber(
             before_frame,
             after_frame,
-            pond.x,
-            pond.y,
-            pond.width,
-            pond.height,
+            (pond.x, pond.y, pond.width, pond.height),
             drag_label=f"rec_{len(self.samples)}",
         )
         if bobber is None:
@@ -309,6 +304,9 @@ class CastRecorder:
 
 
 _MIN_DRAG_MAGNITUDE = 30
+_MIN_USABLE_SAMPLES = 2
+_MIN_OFFSET_PX = 10
+_DEFAULT_AIM_FALLBACK = 3.0
 
 
 def fit_cast_params(samples: list[CastSample]) -> CastParams | None:
@@ -322,9 +320,10 @@ def fit_cast_params(samples: list[CastSample]) -> CastParams | None:
         for s in samples
         if math.hypot(s.drag_dx, s.drag_dy) >= _MIN_DRAG_MAGNITUDE and s.drag_dy > 0
     ]
-    if len(usable) < 2:
+    if len(usable) < _MIN_USABLE_SAMPLES:
         log.warning(
-            "Need 2+ usable samples (drag >= %dpx), have %d of %d",
+            "Need %d+ usable samples (drag >= %dpx), have %d of %d",
+            _MIN_USABLE_SAMPLES,
             _MIN_DRAG_MAGNITUDE,
             len(usable),
             len(samples),
@@ -338,11 +337,11 @@ def fit_cast_params(samples: list[CastSample]) -> CastParams | None:
         offset_y = abs(s.target_y - s.button_y) / _RETINA_SCALE
         offset_x = abs(s.target_x - s.button_x) / _RETINA_SCALE
 
-        if offset_y > 10:
+        if offset_y > _MIN_OFFSET_PX:
             pb = abs(s.drag_dy) / math.sqrt(offset_y)
             power_estimates.append(pb)
 
-        if offset_x > 10:
+        if offset_x > _MIN_OFFSET_PX:
             ab = abs(s.drag_dx) / math.sqrt(offset_x)
             aim_estimates.append(ab)
 
@@ -351,7 +350,7 @@ def fit_cast_params(samples: list[CastSample]) -> CastParams | None:
         return None
 
     power_base = float(np.median(power_estimates))
-    aim_base = float(np.median(aim_estimates)) if aim_estimates else 3.0
+    aim_base = float(np.median(aim_estimates)) if aim_estimates else _DEFAULT_AIM_FALLBACK
 
     log.info(
         "Fitted cast params: power_base=%.2f (from %d samples), aim_base=%.2f (from %d samples)",
@@ -371,8 +370,8 @@ def fit_cast_params(samples: list[CastSample]) -> CastParams | None:
             off_y,
             s.drag_dx,
             s.drag_dy,
-            abs(s.drag_dy) / max(1, math.sqrt(abs(off_y))) if abs(off_y) > 10 else 0,
-            abs(s.drag_dx) / max(1, math.sqrt(abs(off_x))) if abs(off_x) > 10 else 0,
+            abs(s.drag_dy) / max(1, math.sqrt(abs(off_y))) if abs(off_y) > _MIN_OFFSET_PX else 0,
+            abs(s.drag_dx) / max(1, math.sqrt(abs(off_x))) if abs(off_x) > _MIN_OFFSET_PX else 0,
         )
 
     params = CastParams(power_base=round(power_base, 2), aim_base=round(aim_base, 2))

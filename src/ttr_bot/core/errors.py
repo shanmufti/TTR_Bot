@@ -23,3 +23,11 @@ class CaptureError(TTRBotError):
 
 class TemplateNotFoundError(TTRBotError):
     """A required template image is missing from the templates directory."""
+
+
+class CalibrationNotFittedError(TTRBotError):
+    """Cast calibration was used before fitting."""
+
+
+class GolfActionFileError(TTRBotError, TypeError):
+    """Golf action JSON has an invalid structure."""

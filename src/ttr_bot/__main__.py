@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""TTR Bot – macOS entry point."""
+"""TTR Bot - macOS entry point."""
 
 import platform
 import sys

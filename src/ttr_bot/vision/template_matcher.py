@@ -31,6 +31,12 @@ _FIND_SCALE_OFFSETS = np.array([0.0, -0.04, 0.04])
 
 _MIN_CALIBRATION_CONF = 0.60
 _MIN_CALIBRATION_CONF_RELAXED = 0.48
+_MIN_TEMPLATE_DIM = 10
+_MIN_TEMPLATE_DIM_DS = 8
+_DOWNSAMPLE_WIDTH_THRESHOLD = 1800
+_CALIBRATION_FAIL_CONF = 0.30
+_SCALE_IDENTITY_EPSILON = 0.01
+_OFFSET_ZERO_EPSILON = 1e-9
 
 _CALIBRATION_ANCHORS = [
     "hud_bottom_right_icon",
@@ -113,7 +119,7 @@ class TemplateMatcher:
         th, tw = tmpl.shape[:2]
         new_w = int(tw * scale)
         new_h = int(th * scale)
-        if new_w < 10 or new_h < 10 or new_w > fw or new_h > fh:
+        if new_w < _MIN_TEMPLATE_DIM or new_h < _MIN_TEMPLATE_DIM or new_w > fw or new_h > fh:
             return -1.0
         scaled = cv2.resize(tmpl, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
         result = cv2.matchTemplate(frame_bgr, scaled, cv2.TM_CCOEFF_NORMED)
@@ -130,12 +136,12 @@ class TemplateMatcher:
 
         t_cal = time.monotonic()
         fh, fw = frame_bgr.shape[:2]
-        self._downsample_factor = 2 if fw >= 1800 else 1
+        self._downsample_factor = 2 if fw >= _DOWNSAMPLE_WIDTH_THRESHOLD else 1
         log.info("calibrate_scale: frame=%dx%d downsample=%dx", fw, fh, self._downsample_factor)
 
         best_anchor, best_scale, best_val = self._coarse_anchor_scan(frame_bgr)
 
-        if best_val < 0.30:
+        if best_val < _CALIBRATION_FAIL_CONF:
             log.warning(
                 "calibrate_scale FAILED: best conf=%.3f (no usable match). "
                 "Run: uv run python tools/snapshot_game_state.py --promote-template",
@@ -257,7 +263,7 @@ class TemplateMatcher:
             return None
 
         scale = self._global_scale if self._global_scale is not None else 1.0
-        if abs(scale - 1.0) > 0.01:
+        if abs(scale - 1.0) > _SCALE_IDENTITY_EPSILON:
             new_w = int(tmpl.shape[1] * scale)
             new_h = int(tmpl.shape[0] * scale)
             tmpl = cv2.resize(tmpl, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
@@ -266,7 +272,7 @@ class TemplateMatcher:
         return tmpl
 
     def _get_offset_scaled(self, name: str, offset: float) -> np.ndarray | None:
-        if abs(offset) < 1e-9:
+        if abs(offset) < _OFFSET_ZERO_EPSILON:
             return self._get_scaled_template(name)
 
         key = (name, offset)
@@ -280,7 +286,7 @@ class TemplateMatcher:
         scale = self._global_scale + offset
         new_w = int(raw.shape[1] * scale)
         new_h = int(raw.shape[0] * scale)
-        if new_w < 10 or new_h < 10:
+        if new_w < _MIN_TEMPLATE_DIM or new_h < _MIN_TEMPLATE_DIM:
             return None
 
         scaled = cv2.resize(raw, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
@@ -339,7 +345,7 @@ class TemplateMatcher:
             if ds > 1:
                 th_ds = tmpl.shape[0] // ds
                 tw_ds = tmpl.shape[1] // ds
-                if th_ds < 8 or tw_ds < 8:
+                if th_ds < _MIN_TEMPLATE_DIM_DS or tw_ds < _MIN_TEMPLATE_DIM_DS:
                     continue
                 tmpl_small = cv2.resize(tmpl, (tw_ds, th_ds), interpolation=cv2.INTER_AREA)
             else:

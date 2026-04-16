@@ -115,34 +115,41 @@ _DEFAULT_AIM_BASE = 3.0
 _MIN_POWER = 40
 _MAX_POWER = 200
 
-_power_base: float = _DEFAULT_POWER_BASE
-_aim_base_left: float = _DEFAULT_AIM_BASE
-_aim_base_right: float = _DEFAULT_AIM_BASE
-_aim_offset: float = 0.0
+
+class _CastState:
+    """Mutable container for loaded cast parameters."""
+
+    def __init__(self) -> None:
+        self.power_base: float = _DEFAULT_POWER_BASE
+        self.aim_base_left: float = _DEFAULT_AIM_BASE
+        self.aim_base_right: float = _DEFAULT_AIM_BASE
+        self.aim_offset: float = 0.0
+
+
+_cast = _CastState()
 
 
 def reload_cast_params() -> None:
     """Load fitted cast params from disk, falling back to defaults."""
-    global _power_base, _aim_base_left, _aim_base_right, _aim_offset
     from ttr_bot.core.cast_params import CastParams
 
     params = CastParams.load()
     if params is not None:
-        _power_base = params.power_base
-        _aim_base_left = params.aim_base
-        _aim_base_right = params.aim_base_right or params.aim_base
-        _aim_offset = params.aim_offset or 0.0
+        _cast.power_base = params.power_base
+        _cast.aim_base_left = params.aim_base
+        _cast.aim_base_right = params.aim_base_right or params.aim_base
+        _cast.aim_offset = params.aim_offset or 0.0
     else:
-        _power_base = _DEFAULT_POWER_BASE
-        _aim_base_left = _DEFAULT_AIM_BASE
-        _aim_base_right = _DEFAULT_AIM_BASE
-        _aim_offset = 0.0
+        _cast.power_base = _DEFAULT_POWER_BASE
+        _cast.aim_base_left = _DEFAULT_AIM_BASE
+        _cast.aim_base_right = _DEFAULT_AIM_BASE
+        _cast.aim_offset = 0.0
     log.info(
         "Cast params: power=%.2f aim_left=%.2f aim_right=%.2f offset=%.1f",
-        _power_base,
-        _aim_base_left,
-        _aim_base_right,
-        _aim_offset,
+        _cast.power_base,
+        _cast.aim_base_left,
+        _cast.aim_base_right,
+        _cast.aim_offset,
     )
 
 
@@ -167,19 +174,19 @@ def fishing_cast_at(
 
     btn_sx, btn_sy = _to_screen(win, button_x, button_y)
 
-    offset_x = (target_x - button_x) / _RETINA_SCALE + _aim_offset
+    offset_x = (target_x - button_x) / _RETINA_SCALE + _cast.aim_offset
     offset_y = (target_y - button_y) / _RETINA_SCALE
 
     if offset_x > 0:
         sign_x = -1
-        aim_coeff = _aim_base_right
+        aim_coeff = _cast.aim_base_right
     else:
         sign_x = 1
-        aim_coeff = _aim_base_left
+        aim_coeff = _cast.aim_base_left
     drag_dx = int(sign_x * aim_coeff * math.sqrt(abs(offset_x)))
 
     distance = abs(offset_y)
-    desired_mag = max(_MIN_POWER, min(_power_base * math.sqrt(distance), _MAX_POWER))
+    desired_mag = max(_MIN_POWER, min(_cast.power_base * math.sqrt(distance), _MAX_POWER))
 
     dx_sq = drag_dx * drag_dx
     mag_sq = desired_mag * desired_mag

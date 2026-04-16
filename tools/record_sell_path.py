@@ -32,14 +32,22 @@ TRACKED_KEYS = {
     keyboard.Key.right,
 }
 
-_events: list[dict] = []
+
+class _RecordingState:
+    """Mutable container for the current recording session."""
+
+    def __init__(self) -> None:
+        self.events: list[dict] = []
+        self.start_time: float = 0.0
+        self.held_keys: set[str] = set()
+
+
+_rec = _RecordingState()
 _phase_done = threading.Event()
-_start_time: float = 0.0
-_held_keys: set[str] = set()
 
 
 def _ts() -> float:
-    return round(time.time() - _start_time, 3)
+    return round(time.time() - _rec.start_time, 3)
 
 
 # ---------------------------------------------------------------------------
@@ -54,17 +62,17 @@ def _on_key_press(key):
 
     if key in TRACKED_KEYS:
         name = key.name  # "up", "down", "left", "right"
-        if name not in _held_keys:
-            _held_keys.add(name)
-            _events.append({"t": _ts(), "type": "key_down", "key": name})
+        if name not in _rec.held_keys:
+            _rec.held_keys.add(name)
+            _rec.events.append({"t": _ts(), "type": "key_down", "key": name})
 
 
 def _on_key_release(key):
     if key in TRACKED_KEYS:
         name = key.name
-        if name in _held_keys:
-            _held_keys.discard(name)
-            _events.append({"t": _ts(), "type": "key_up", "key": name})
+        if name in _rec.held_keys:
+            _rec.held_keys.discard(name)
+            _rec.events.append({"t": _ts(), "type": "key_up", "key": name})
 
 
 # ---------------------------------------------------------------------------
@@ -79,9 +87,9 @@ def _on_click(x, y, button, pressed):
         if win is not None:
             wx = x - win.x
             wy = y - win.y
-            _events.append({"t": _ts(), "type": action, "x": wx, "y": wy})
+            _rec.events.append({"t": _ts(), "type": action, "x": wx, "y": wy})
         else:
-            _events.append({"t": _ts(), "type": action, "x": x, "y": y})
+            _rec.events.append({"t": _ts(), "type": action, "x": x, "y": y})
 
 
 # ---------------------------------------------------------------------------
@@ -90,12 +98,10 @@ def _on_click(x, y, button, pressed):
 
 
 def _record_phase(phase_name: str) -> list[dict]:
-    global _events, _start_time
-
-    _events = []
-    _held_keys.clear()
+    _rec.events = []
+    _rec.held_keys.clear()
     _phase_done.clear()
-    _start_time = time.time()
+    _rec.start_time = time.time()
 
     print(f"\n  Recording: {phase_name}")
     print("  Use arrow keys to walk, mouse to click. Press F8 when done.")
@@ -110,7 +116,7 @@ def _record_phase(phase_name: str) -> list[dict]:
     kb_listener.stop()
     ms_listener.stop()
 
-    result = list(_events)
+    result = list(_rec.events)
     print(f"  Recorded {len(result)} events in {_ts():.1f}s")
     return result
 

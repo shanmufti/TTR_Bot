@@ -14,6 +14,7 @@ import os
 import threading
 import time
 import tkinter as tk
+from typing import NamedTuple
 
 from ttr_bot.vision.localizer import (
     GardenLocalizer,
@@ -97,13 +98,17 @@ def _draw_map_nodes(canvas: tk.Canvas, garden_map: GardenMap) -> None:
             canvas.create_text(x, y - 14, text=node.id, fill="#eaeaea", font=("Helvetica", 8))
 
 
+class _GuiWidgets(NamedTuple):
+    root: tk.Tk
+    canvas: tk.Canvas
+    dot_id: int
+    info_var: tk.StringVar
+
+
 def _gui_update_loop(
     localizer: GardenLocalizer,
     heading_est: HeadingEstimator,
-    root: tk.Tk,
-    dot_id: int,
-    info_var: tk.StringVar,
-    canvas: tk.Canvas,
+    gui: _GuiWidgets,
     stop_event: threading.Event,
 ) -> None:
     """Background thread: localize and push updates to the GUI."""
@@ -116,7 +121,15 @@ def _gui_update_loop(
         result = localizer.localize(frame)
         if result is not None:
             heading = heading_est.update(result)
-            root.after(0, _gui_draw_result, canvas, dot_id, info_var, result, heading)
+            gui.root.after(
+                0,
+                _gui_draw_result,
+                gui.canvas,
+                gui.dot_id,
+                gui.info_var,
+                result,
+                heading,
+            )
 
         time.sleep(settings.NAV_RECHECK_INTERVAL_MS / 1000.0)
 
@@ -182,9 +195,10 @@ def _run_gui(localizer: GardenLocalizer, garden_map: GardenMap) -> None:
 
     root.protocol("WM_DELETE_WINDOW", _on_close)
 
+    gui = _GuiWidgets(root, canvas, dot_id, info_var)
     t = threading.Thread(
         target=_gui_update_loop,
-        args=(localizer, heading_est, root, dot_id, info_var, canvas, stop_event),
+        args=(localizer, heading_est, gui, stop_event),
         daemon=True,
     )
     t.start()

@@ -12,6 +12,7 @@ from typing import NamedTuple
 import cv2
 import numpy as np
 
+from ttr_bot.core.errors import CalibrationNotFittedError
 from ttr_bot.utils.logger import log
 
 _CALIBRATION_FILE = os.path.join(
@@ -40,9 +41,7 @@ _BOBBER_MAX_AREA = 5000
 
 
 def _debug_bobber_frames(
-    before: np.ndarray,
-    after: np.ndarray,
-    thresh: np.ndarray,
+    frames: tuple[np.ndarray, np.ndarray, np.ndarray],
     contours: list,
     roi: tuple[int, int, int, int],
     drag_label: str,
@@ -50,6 +49,7 @@ def _debug_bobber_frames(
     """Write before/after/diff debug images for bobber detection."""
     from ttr_bot.utils import debug_frames as dbg
 
+    before, after, thresh = frames
     x1, y1, x2, y2 = roi
     rect_ann = {
         "type": "rect",
@@ -89,10 +89,7 @@ def _debug_bobber_frames(
 def detect_bobber(
     before: np.ndarray,
     after: np.ndarray,
-    pond_x: int,
-    pond_y: int,
-    pond_w: int,
-    pond_h: int,
+    pond_rect: tuple[int, int, int, int],
     *,
     drag_label: str = "",
 ) -> tuple[int, int] | None:
@@ -111,6 +108,7 @@ def detect_bobber(
     gray_before = cv2.cvtColor(before, cv2.COLOR_BGR2GRAY)
     gray_after = cv2.cvtColor(after, cv2.COLOR_BGR2GRAY)
 
+    pond_x, pond_y, pond_w, pond_h = pond_rect
     y1, y2 = pond_y, pond_y + pond_h
     x1, x2 = pond_x, pond_x + pond_w
     h, w = gray_before.shape
@@ -128,7 +126,7 @@ def detect_bobber(
     contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     if dbg.is_enabled():
-        _debug_bobber_frames(before, after, thresh, contours, (x1, y1, x2, y2), drag_label)
+        _debug_bobber_frames((before, after, thresh), contours, (x1, y1, x2, y2), drag_label)
 
     if not contours:
         log.warning("detect_bobber: no changed blobs found in pond region")
@@ -147,11 +145,11 @@ def detect_bobber(
 
     best = max(valid, key=cv2.contourArea)
     area = cv2.contourArea(best)
-    M = cv2.moments(best)
-    if M["m00"] == 0:
+    mom = cv2.moments(best)
+    if mom["m00"] == 0:
         return None
-    cx = int(M["m10"] / M["m00"]) + x1
-    cy = int(M["m01"] / M["m00"]) + y1
+    cx = int(mom["m10"] / mom["m00"]) + x1
+    cy = int(mom["m01"] / mom["m00"]) + y1
 
     if dbg.is_enabled():
         dbg.save(
@@ -218,16 +216,20 @@ class CastCalibration:
         We know: landing_offset = M_fwd @ drag  (forward mapping).
         We need: drag = M_inv @ target_offset    (inverse mapping).
         """
-        if len(self._samples) < 2:
-            log.warning("Need at least 2 calibration samples, have %d", len(self._samples))
+        min_samples = 2
+        if len(self._samples) < min_samples:
+            log.warning(
+                "Need at least %d calibration samples, have %d",
+                min_samples,
+                len(self._samples),
+            )
             return False
 
-        # A = drag vectors, B = landing offsets
-        A = np.array([[s.drag_dx, s.drag_dy] for s in self._samples])
-        B = np.array([[s.land_dx, s.land_dy] for s in self._samples])
+        drags = np.array([[s.drag_dx, s.drag_dy] for s in self._samples])
+        landings = np.array([[s.land_dx, s.land_dy] for s in self._samples])
 
-        # Solve for M_fwd: B = A @ M_fwd^T  →  M_fwd^T = lstsq(A, B)
-        result, *_ = np.linalg.lstsq(A, B, rcond=None)
+        # Solve for M_fwd: landings = drags @ M_fwd^T
+        result, *_ = np.linalg.lstsq(drags, landings, rcond=None)
         m_fwd = result.T  # 2x2: landing = M_fwd @ drag
 
         # Invert to get: drag = M_inv @ target_offset
@@ -243,7 +245,7 @@ class CastCalibration:
     def compute_drag(self, target_dx: float, target_dy: float) -> tuple[int, int]:
         """Map a target offset (shadow - button, retina px) to a drag vector (screen px)."""
         if self._matrix is None:
-            raise RuntimeError("Cast calibration not fitted")
+            raise CalibrationNotFittedError
         offset = np.array([target_dx, target_dy])
         drag = self._matrix @ offset
         return round(drag[0]), round(drag[1])

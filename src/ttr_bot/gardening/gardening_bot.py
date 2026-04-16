@@ -150,8 +150,8 @@ class GardenBot:
                         return
 
                 elif action.action == "water":
-                    self._notify_status(f"{label} Watering ×{action.water_count}…")
-                    self.stats.current_action = f"Watering ×{action.water_count}"
+                    self._notify_status(f"{label} Watering x{action.water_count}...")
+                    self.stats.current_action = f"Watering x{action.water_count}"
                     self._notify_stats()
                     ok = self.water_plant(action.water_count)
                     if not ok:
@@ -415,9 +415,7 @@ class GardenBot:
             log.warning("Calibration failed: TTR window not found")
             return False
 
-        set_calibrated_bounds(
-            win.x, win.y, win.width, win.height, window_id=win.window_id, pid=win.pid
-        )
+        set_calibrated_bounds(win)
 
         frame = capture_window(win)
         if frame is None:

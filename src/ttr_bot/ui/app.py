@@ -157,9 +157,7 @@ class App:
             self._status_var.set("Calibration failed — TTR not found")
             return
 
-        set_calibrated_bounds(
-            win.x, win.y, win.width, win.height, window_id=win.window_id, pid=win.pid
-        )
+        set_calibrated_bounds(win)
         log.info("Window locked: %dx%d at (%d,%d)", win.width, win.height, win.x, win.y)
 
         frame = capture_window(win)
@@ -184,7 +182,7 @@ class App:
         if scale < 0:
             self._status_var.set("Calibration failed — no known button visible")
         else:
-            self._status_var.set(f"Calibrated: {w}×{h} scale={scale:.1f}")
+            self._status_var.set(f"Calibrated: {w}x{h} scale={scale:.1f}")
 
     # ------------------------------------------------------------------
     # Logger

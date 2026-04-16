@@ -21,50 +21,40 @@ class WindowInfo(NamedTuple):
     height: int
 
 
-_lock = threading.Lock()
-_calibrated_bounds: dict | None = None
+class _CalibrationState:
+    """Thread-safe container for calibrated window bounds."""
+
+    def __init__(self) -> None:
+        self.lock = threading.Lock()
+        self.bounds: dict | None = None
 
 
-def set_calibrated_bounds(
-    x: int,
-    y: int,
-    width: int,
-    height: int,
-    window_id: int | None = None,
-    pid: int | None = None,
-) -> None:
-    """Lock the window bounds (and optionally ID/PID) to a calibrated snapshot.
+_cal = _CalibrationState()
 
-    When *window_id* is set, subsequent ``find_ttr_window`` calls will prefer
-    the window with that ID, avoiding confusion when multiple game windows are
-    open.
+
+def set_calibrated_bounds(win: WindowInfo) -> None:
+    """Lock the window bounds to a calibrated snapshot.
+
+    Subsequent ``find_ttr_window`` calls will prefer the window with
+    this ID, avoiding confusion when multiple game windows are open.
     """
-    global _calibrated_bounds
-    with _lock:
-        _calibrated_bounds = {
-            "x": x,
-            "y": y,
-            "width": width,
-            "height": height,
-            "window_id": window_id,
-            "pid": pid,
-        }
+    with _cal.lock:
+        _cal.bounds = win._asdict()
     log.info(
         "Window bounds locked: %dx%d at (%d,%d)  wid=%s pid=%s",
-        width,
-        height,
-        x,
-        y,
-        window_id,
-        pid,
+        win.width,
+        win.height,
+        win.x,
+        win.y,
+        win.window_id,
+        win.pid,
     )
 
 
 def clear_calibrated_bounds() -> None:
     """Remove calibrated bounds, revert to auto-detection."""
-    global _calibrated_bounds
-    with _lock:
-        _calibrated_bounds = None
+    with _cal.lock:
+        _cal.bounds = None
 
 
 def find_ttr_window() -> WindowInfo | None:
@@ -80,7 +70,8 @@ def find_ttr_window() -> WindowInfo | None:
     if window_list is None:
         return None
 
-    locked_wid = (_calibrated_bounds or {}).get("window_id")
+    cal = _cal.bounds
+    locked_wid = (cal or {}).get("window_id")
 
     fallback = None
     for win in window_list:
@@ -93,14 +84,14 @@ def find_ttr_window() -> WindowInfo | None:
         pid = int(win[Quartz.kCGWindowOwnerPID])
         bounds = win.get(Quartz.kCGWindowBounds, {})
 
-        if _calibrated_bounds:
+        if cal:
             info = WindowInfo(
                 window_id=wid,
                 pid=pid,
-                x=_calibrated_bounds["x"],
-                y=_calibrated_bounds["y"],
-                width=_calibrated_bounds["width"],
-                height=_calibrated_bounds["height"],
+                x=cal["x"],
+                y=cal["y"],
+                width=cal["width"],
+                height=cal["height"],
             )
         else:
             info = WindowInfo(

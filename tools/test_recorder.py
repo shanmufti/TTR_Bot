@@ -47,9 +47,13 @@ def main() -> None:
     print()
 
     if summary:
+        min_fps, max_fps = 4.0, 7.0
+        min_frames = 10
+        max_size_mb = 500
+
         print("Pass criteria check:")
         fps = summary.get("avg_fps", 0)
-        ok_fps = 4.0 <= fps <= 7.0
+        ok_fps = min_fps <= fps <= max_fps
         print(f"  FPS: {fps} {'✓' if ok_fps else '✗ (expected 4-6)'}")
 
         events = summary.get("keyboard_events", 0)
@@ -60,13 +64,13 @@ def main() -> None:
         )
 
         frames = summary.get("frame_count", 0)
-        print(f"  Frames: {frames} {'✓' if frames > 10 else '✗'}")
+        print(f"  Frames: {frames} {'✓' if frames > min_frames else '✗'}")
 
         size_mb = summary.get("total_frame_bytes", 0) / (1024 * 1024)
-        ok_size = size_mb < 500
+        ok_size = size_mb < max_size_mb
         print(f"  Size: {size_mb:.1f} MB {'✓' if ok_size else '✗ (too large)'}")
 
-        all_pass = ok_fps and events > 0 and frames > 10 and ok_size
+        all_pass = ok_fps and events > 0 and frames > min_frames and ok_size
         print(f"\n{'ALL PASS ✓' if all_pass else 'SOME CHECKS FAILED ✗'}")
 
 

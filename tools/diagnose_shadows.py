@@ -96,7 +96,9 @@ def _print_movement(c1, c2):
         closest = min(c2, key=lambda s: abs(s.cx - s1.cx) + abs(s.cy - s1.cy))
         dx = closest.cx - s1.cx
         dy = closest.cy - s1.cy
-        state = "MOVED" if abs(dx) > 10 or abs(dy) > 10 else "STATIC"
+        threshold = 10
+        moved = abs(dx) > threshold or abs(dy) > threshold
+        state = "MOVED" if moved else "STATIC"
         print(
             f"  Shadow {i}: ({s1.cx},{s1.cy}) -> ({closest.cx},{closest.cy})"
             f" delta=({dx:+d},{dy:+d}) {state}"

@@ -31,8 +31,10 @@ class TestCastCalibration:
         assert cal.is_calibrated is True
 
     def test_compute_drag_raises_when_not_fitted(self):
+        from ttr_bot.core.errors import CalibrationNotFittedError
+
         cal = CastCalibration()
-        with pytest.raises(RuntimeError, match="not fitted"):
+        with pytest.raises(CalibrationNotFittedError):
             cal.compute_drag(100, -200)
 
     def test_compute_drag_returns_ints(self):

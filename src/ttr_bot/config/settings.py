@@ -36,7 +36,7 @@ POST_CAST_DELAY_S = 1.0  # wait after cast before polling for bite
 BETWEEN_CAST_DELAY_S = 0.2  # wait between successive casts (rod reset animation)
 
 # ---------------------------------------------------------------------------
-# Vision – water / pond
+# Vision - water / pond
 # ---------------------------------------------------------------------------
 WATER_HUE_RANGE = (60, 140)  # H range in HSV (green through cyan/blue)
 WATER_SAT_MIN = 40  # minimum saturation
@@ -48,7 +48,7 @@ POND_MIN_WATER_PIXELS = 50  # minimum water pixels to accept pond
 POND_PADDING = 15  # padding around detected pond area
 
 # ---------------------------------------------------------------------------
-# Vision – fish shadow detection
+# Vision - fish shadow detection
 # ---------------------------------------------------------------------------
 SHADOW_MIN_ASPECT = 0.3  # minimum blob aspect ratio
 SHADOW_MAX_ASPECT = 2.5  # maximum blob aspect ratio
@@ -67,7 +67,7 @@ FISH_NEAR_THRESHOLD = 60  # px: skip fish this close to last-miss target
 FISH_BUBBLE_SCORE_BOOST = 0.5  # ranking bonus for shadows with bubbles
 
 # ---------------------------------------------------------------------------
-# Vision – bubble detection
+# Vision - bubble detection
 # ---------------------------------------------------------------------------
 BUBBLE_SCAN_WIDTH = 60  # px width of scan area above shadow
 BUBBLE_SCAN_HEIGHT = 80  # px height of scan area above shadow
@@ -78,7 +78,7 @@ BUBBLE_MAX_COLOR_DIFF = 50  # max channel spread (R vs G vs B)
 BUBBLE_SCAN_STEP = 3  # pixel step when scanning for bubbles
 
 # ---------------------------------------------------------------------------
-# Vision – template matching
+# Vision - template matching
 # ---------------------------------------------------------------------------
 TEMPLATE_MATCH_THRESHOLD = 0.65  # minimum confidence for a template match
 TEMPLATE_NAMES = {
@@ -132,12 +132,14 @@ GARDEN_WATERS_AFTER_PLANT = 1  # times to water after planting
 GARDEN_FIND_TIMEOUT_S = 10.0  # max seconds to poll for a template
 
 # ---------------------------------------------------------------------------
-# Gardening – sweep navigation
+# Gardening - sweep navigation
 # ---------------------------------------------------------------------------
 SWEEP_CHECK_INTERVAL_S = 0.3  # seconds of walking between bed-detection polls
 SWEEP_WALK_BURST_S = 0.8  # walk+curve duration per step (up, or up+left/right)
 SWEEP_TURN_BURST_S = 0.2  # base turn duration (scaled by magnitude 0-1)
 SWEEP_SCAN_ROTATE_S = 0.18  # rotation duration when scanning for flowers
+SWEEP_MAX_IDLE = 10  # idle ticks before recovery
+SWEEP_WALK_BEFORE_ROTATE = 4  # walk forward N times before switching to rotation
 SWEEP_TARGET_BEDS = 10  # expected flower beds per estate garden
 SWEEP_MAX_LAPS = 3  # perimeter laps before giving up
 SWEEP_POST_INTERACT_WALK_S = 0.6  # walk-away time after interacting with a bed

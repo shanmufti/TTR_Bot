@@ -81,34 +81,40 @@ def _check_blob_geometry(
     return area, bw, bh, aspect, fill
 
 
+class _BlobContext(NamedTuple):
+    """Constant context shared across all blob filter calls in one frame."""
+
+    stats: np.ndarray
+    centroids: np.ndarray
+    water_mask: np.ndarray
+    frame_bgr: np.ndarray
+    inner_offset: tuple[int, int]
+    avg_water_bright: int
+
+
 def _filter_blob(
     label_id: int,
-    stats: np.ndarray,
-    centroids: np.ndarray,
-    water_mask: np.ndarray,
-    frame_bgr: np.ndarray,
-    inner_x: int,
-    inner_y: int,
-    avg_water_bright: int,
+    ctx: _BlobContext,
     rejected: dict[str, int],
 ) -> FishCandidate | None:
     from ttr_bot.vision.bubble_detector import has_bubbles_above
 
-    geom = _check_blob_geometry(stats, label_id, rejected)
+    geom = _check_blob_geometry(ctx.stats, label_id, rejected)
     if geom is None:
         return None
     area, bw, bh, aspect, fill = geom
 
-    blob_cx = int(centroids[label_id][0])
-    blob_cy = int(centroids[label_id][1])
+    blob_cx = int(ctx.centroids[label_id][0])
+    blob_cy = int(ctx.centroids[label_id][1])
+    inner_x, inner_y = ctx.inner_offset
     frame_cx = inner_x + blob_cx
     frame_cy = inner_y + blob_cy
 
-    if not _is_surrounded_by_water(water_mask, blob_cx, blob_cy):
+    if not _is_surrounded_by_water(ctx.water_mask, blob_cx, blob_cy):
         rejected["water"] += 1
         return None
 
-    bubbles = has_bubbles_above(frame_bgr, frame_cx, frame_cy, avg_water_bright)
+    bubbles = has_bubbles_above(ctx.frame_bgr, frame_cx, frame_cy, ctx.avg_water_bright)
     score = min(1.0, fill * (area / 500.0))
     log.info(
         "  shadow candidate: (%d,%d) area=%d %dx%d aspect=%.1f fill=%.2f score=%.2f bubbles=%s",
@@ -165,23 +171,18 @@ def detect_fish_shadows(
     )
 
     rejected: dict[str, int] = {"area": 0, "size": 0, "aspect": 0, "fill": 0, "water": 0}
+    ctx = _BlobContext(
+        stats,
+        centroids,
+        water_mask,
+        frame_bgr,
+        (inner_x, inner_y),
+        avg_water_bright,
+    )
     candidates: list[FishCandidate] = [
         c
         for label_id in range(1, num_labels)
-        if (
-            c := _filter_blob(
-                label_id,
-                stats,
-                centroids,
-                water_mask,
-                frame_bgr,
-                inner_x,
-                inner_y,
-                avg_water_bright,
-                rejected,
-            )
-        )
-        is not None
+        if (c := _filter_blob(label_id, ctx, rejected)) is not None
     ]
 
     candidates.sort(key=lambda c: c.size, reverse=True)
@@ -257,6 +258,9 @@ def find_best_fish(
     return (best[0], best[1])
 
 
+_CATCH_POPUP_MIN_RATIO = 0.05
+
+
 def has_catch_popup(frame: np.ndarray) -> bool:
     """Detect the fish-caught popup by its warm-yellow card background.
 
@@ -267,4 +271,4 @@ def has_catch_popup(frame: np.ndarray) -> bool:
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
     roi = hsv[h // 6 : h // 2, w // 4 : 3 * w // 4]
     card = cv2.inRange(roi, (25, 40, 220), (35, 90, 255))
-    return bool(np.count_nonzero(card) / card.size > 0.05)
+    return bool(np.count_nonzero(card) / card.size > _CATCH_POPUP_MIN_RATIO)

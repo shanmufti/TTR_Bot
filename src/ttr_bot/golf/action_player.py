@@ -12,6 +12,7 @@ from typing import Self
 import pyautogui
 
 from ttr_bot.core import input_controller as inp
+from ttr_bot.core.errors import GolfActionFileError
 from ttr_bot.utils.logger import log
 
 # Action name -> pyautogui key name (macOS Control for swing power).
@@ -83,7 +84,7 @@ def load_actions(path: str) -> list[GolfActionCommand]:
     with open(path, encoding="utf-8") as f:
         raw = json.load(f)
     if not isinstance(raw, list):
-        raise TypeError("Golf JSON must be a list of actions")
+        raise GolfActionFileError
     return [GolfActionCommand.from_dict(x) for x in raw]
 
 

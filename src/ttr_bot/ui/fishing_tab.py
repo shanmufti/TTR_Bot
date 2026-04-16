@@ -194,9 +194,7 @@ class FishingTab:
                 self._root.after(0, self._start_failed, "TTR window not found")
                 return
 
-            set_calibrated_bounds(
-                win.x, win.y, win.width, win.height, window_id=win.window_id, pid=win.pid
-            )
+            set_calibrated_bounds(win)
             log.info("Window locked: %dx%d at (%d,%d)", win.width, win.height, win.x, win.y)
 
             clear_cache()
@@ -219,7 +217,7 @@ class FishingTab:
         self._start_btn.config(state="normal")
 
     def _start_fishing(self, scale: float, w: int, h: int) -> None:
-        self._status_var.set(f"Calibrated: {w}×{h} scale={scale:.1f}")
+        self._status_var.set(f"Calibrated: {w}x{h} scale={scale:.1f}")
 
         cfg = FishingConfig(
             max_casts=self._casts_var.get(),
@@ -269,7 +267,8 @@ class FishingTab:
 
     def _on_recording_done(self, samples: list) -> None:
         self._record_btn.config(state="normal")
-        if len(samples) >= 2:
+        min_samples = settings.CAST_RECORDER_MIN_SAMPLES
+        if len(samples) >= min_samples:
             self._record_status.config(text="Fitting cast curves…")
             params = fit_cast_params(samples)
             if params is not None:

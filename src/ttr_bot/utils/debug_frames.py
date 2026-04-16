@@ -16,29 +16,37 @@ import numpy as np
 from ttr_bot.config import settings
 from ttr_bot.utils.logger import log
 
-_lock = threading.Lock()
-_enabled = os.environ.get("TTR_DEBUG_FRAMES", "0") == "1"
-_debug_dir = Path(settings.DATA_DIR) / "_debug" / "fishing"
-_session_dir: Path | None = None
+_DEBUG_DIR = Path(settings.DATA_DIR) / "_debug" / "fishing"
+
+
+class _DebugState:
+    """Mutable singleton holding debug-frame configuration."""
+
+    def __init__(self) -> None:
+        self.lock = threading.Lock()
+        self.enabled = os.environ.get("TTR_DEBUG_FRAMES", "0") == "1"
+        self.session_dir: Path | None = None
+        self.frame_counter = 0
+
+
+_state = _DebugState()
 
 
 def enable() -> None:
     """Turn on debug-frame saving for the current process."""
-    global _enabled
-    with _lock:
-        _enabled = True
+    with _state.lock:
+        _state.enabled = True
 
 
 def disable() -> None:
     """Turn off debug-frame saving."""
-    global _enabled
-    with _lock:
-        _enabled = False
+    with _state.lock:
+        _state.enabled = False
 
 
 def is_enabled() -> bool:
     """Return True if debug-frame saving is active."""
-    return _enabled
+    return _state.enabled
 
 
 def clear_pngs(directory: str | Path) -> None:
@@ -51,16 +59,12 @@ def clear_pngs(directory: str | Path) -> None:
 
 
 def _get_session_dir() -> Path:
-    global _session_dir
-    if _session_dir is None:
+    if _state.session_dir is None:
         ts = time.strftime("%Y%m%d_%H%M%S")
-        _session_dir = _debug_dir / ts
-        _session_dir.mkdir(parents=True, exist_ok=True)
-        log.info("Debug frames → %s", _session_dir)
-    return _session_dir
-
-
-_frame_counter = 0
+        _state.session_dir = _DEBUG_DIR / ts
+        _state.session_dir.mkdir(parents=True, exist_ok=True)
+        log.info("Debug frames → %s", _state.session_dir)
+    return _state.session_dir
 
 
 def save(
@@ -79,11 +83,10 @@ def save(
       - ``{"type": "text", "pos": (x,y), "text": "...", "color": (B,G,R)}``
       - ``{"type": "line", "pt1": (x,y), "pt2": (x,y), "color": (B,G,R)}``
     """
-    if not _enabled:
+    if not _state.enabled:
         return None
 
-    global _frame_counter
-    _frame_counter += 1
+    _state.frame_counter += 1
 
     out = frame.copy()
 
@@ -109,7 +112,7 @@ def save(
             cv2.line(out, ann["pt1"], ann["pt2"], color, thickness)
 
     d = _get_session_dir()
-    fname = f"{_frame_counter:03d}_{label}.png"
+    fname = f"{_state.frame_counter:03d}_{label}.png"
     path = d / fname
     cv2.imwrite(str(path), out)
     log.debug("debug frame saved: %s", path)

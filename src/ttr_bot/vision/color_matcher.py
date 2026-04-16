@@ -25,15 +25,21 @@ def build_water_mask(frame_bgr: np.ndarray) -> np.ndarray:
     return cv2.inRange(hsv, lower, upper)
 
 
+_WATER_BG_AVG_MIN = 60
+_WATER_BRIGHTNESS_MIN = 40
+_SHADOW_FLOOR_BRIGHTNESS = 20
+_RELATIVE_SHADOW_DIFF = 12
+
+
 def is_water_color_bgr(b: int, g: int, r: int) -> bool:
-    """Quick BGR check: water is teal/cyan – G and B dominate R."""
+    """Quick BGR check: water is teal/cyan - G and B dominate R."""
     avg_bg = (int(b) + int(g)) / 2
-    if avg_bg < 60:
+    if avg_bg < _WATER_BG_AVG_MIN:
         return False
     if int(r) > avg_bg:
         return False
     brightness = (int(r) + int(g) + int(b)) / 3
-    return brightness > 40
+    return brightness > _WATER_BRIGHTNESS_MIN
 
 
 def is_shadow_pixel_bgr(b: int, g: int, r: int) -> bool:
@@ -59,7 +65,7 @@ def build_shadow_mask(frame_bgr: np.ndarray) -> np.ndarray:
     mask = (
         (brightness <= settings.SHADOW_BRIGHTNESS_MAX)
         & ((bg_avg - r) >= settings.SHADOW_BLUE_GREEN_BIAS)
-        & (brightness > 20)
+        & (brightness > _SHADOW_FLOOR_BRIGHTNESS)
     )
     return mask.astype(np.uint8) * 255
 
@@ -87,7 +93,7 @@ def build_relative_shadow_mask(frame_bgr: np.ndarray, water_mask: np.ndarray) ->
     local_avg = cv2.GaussianBlur(filled, (0, 0), sigmaX=30)
 
     diff = local_avg.astype(np.int16) - gray.astype(np.int16)
-    dark_mask = (diff >= 12).astype(np.uint8) * 255
+    dark_mask = (diff >= _RELATIVE_SHADOW_DIFF).astype(np.uint8) * 255
 
     return cv2.bitwise_and(dark_mask, interior_water)
 

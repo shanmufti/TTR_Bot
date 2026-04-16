@@ -15,6 +15,22 @@ from ttr_bot.golf.ocr_text import read_text_from_bgr
 from ttr_bot.utils.logger import log
 from ttr_bot.vision import template_matcher as tm
 
+_SCOREBOARD_R_MIN = 180
+_SCOREBOARD_G_MIN = 160
+_SCOREBOARD_B_MIN = 100
+_SCOREBOARD_MIN_HITS = 3
+
+_TIMER_R_MIN = 200
+_TIMER_ORANGE_G_RANGE = (100, 200)
+_TIMER_ORANGE_B_MAX = 100
+_TIMER_GOLD_G_MIN = 150
+_TIMER_GOLD_B_MAX = 80
+_TIMER_MIN_RATIO = 0.20
+_TIMER_EDGE_PX = 8
+_TIMER_MIN_RADIUS = 12
+
+_WAIT_LOG_INTERVAL_S = 3.0
+
 
 def list_action_stems() -> list[str]:
     """Basenames of *.json files in the golf actions directory."""
@@ -116,17 +132,22 @@ def is_scoreboard_open(frame: np.ndarray) -> bool:
         if px < 0 or py < 0 or px >= w or py >= h:
             continue
         b, g, r = frame[py, px].astype(int)
-        if r > 180 and g > 160 and b > 100 and r >= g >= b:
+        if (
+            r > _SCOREBOARD_R_MIN
+            and g > _SCOREBOARD_G_MIN
+            and b > _SCOREBOARD_B_MIN
+            and r >= g >= b
+        ):
             hits += 1
-    return hits >= 3
+    return hits >= _SCOREBOARD_MIN_HITS
 
 
 def detect_turn_timer_by_color(frame: np.ndarray) -> bool:
     """Orange/gold countdown in the top-right."""
     h, w = frame.shape[:2]
-    cx = w - max(8, int(w * 0.05))
-    cy = max(8, int(h * 0.07))
-    radius = max(12, min(w, h) // 15)
+    cx = w - max(_TIMER_EDGE_PX, int(w * 0.05))
+    cy = max(_TIMER_EDGE_PX, int(h * 0.07))
+    radius = max(_TIMER_MIN_RADIUS, min(w, h) // 15)
     orange = 0
     total = 0
     for dx in range(-radius, radius + 1, 3):
@@ -136,12 +157,13 @@ def detect_turn_timer_by_color(frame: np.ndarray) -> bool:
                 continue
             total += 1
             b, g, r = frame[y, x].astype(int)
-            is_orange = r > 200 and 100 < g < 200 and b < 100
-            is_gold = r > 200 and g > 150 and b < 80
+            g_lo, g_hi = _TIMER_ORANGE_G_RANGE
+            is_orange = r > _TIMER_R_MIN and g_lo < g < g_hi and b < _TIMER_ORANGE_B_MAX
+            is_gold = r > _TIMER_R_MIN and g > _TIMER_GOLD_G_MIN and b < _TIMER_GOLD_B_MAX
             if is_orange or is_gold:
                 orange += 1
     ratio = orange / total if total else 0.0
-    return ratio > 0.20
+    return ratio > _TIMER_MIN_RATIO
 
 
 def is_ready_to_swing(frame: np.ndarray) -> bool:
@@ -259,7 +281,7 @@ def wait_until_ready_to_swing(
             )
             return
         now = perf_counter()
-        if now - last_log >= 3.0:
+        if now - last_log >= _WAIT_LOG_INTERVAL_S:
             last_log = now
             reason = "no TTR frame" if frame is None else "turn timer template/color not detected"
             log.info(

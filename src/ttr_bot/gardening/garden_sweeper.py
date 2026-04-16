@@ -180,10 +180,10 @@ class GardenSweeper:
     ) -> int:
         """React when no flowers are visible. Returns the updated idle counter."""
         idle_count += 1
-        if idle_count >= 10:
+        if idle_count >= settings.SWEEP_MAX_IDLE:
             self._recover_from_stuck()
             return 0
-        if idle_count <= 4:
+        if idle_count <= settings.SWEEP_WALK_BEFORE_ROTATE:
             self._status(f"No flowers — walking forward to search ({idle_count})")
             outcome = self._walk_and_scan(["up"], settings.SWEEP_WALK_BURST_S)
             if outcome == "bed_found":

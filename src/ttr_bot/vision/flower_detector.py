@@ -36,6 +36,8 @@ _GREEN_LO, _GREEN_HI = (35, 50, 50), (85, 255, 255)
 
 _GREEN_DILATE_PX = 30
 _MIN_BLOB_AREA = 600
+_MAX_ASPECT_TALL = 2.5
+_MAX_ASPECT_WIDE = 3.0
 _MORPH_KERNEL = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
 
 
@@ -79,7 +81,7 @@ def scan_for_flowers(
         if area < _MIN_BLOB_AREA:
             continue
         bx, by, bw, bh = cv2.boundingRect(c)
-        if bw == 0 or bh / bw > 2.5 or bw / max(bh, 1) > 3.0:
+        if bw == 0 or bh / bw > _MAX_ASPECT_TALL or bw / max(bh, 1) > _MAX_ASPECT_WIDE:
             continue
         m = cv2.moments(c)
         if m["m00"] <= 0:
