@@ -8,8 +8,8 @@ dependencies = [
     "numpy>=1.26.0",
     "pyautogui>=0.9.54",
     "pillow>=10.2.0",
-    "pyobjc-framework-quartz>=10.1",
-    "pyobjc-framework-cocoa>=10.1",
+    "pyobjc-framework-quartz>=10.1; sys_platform == 'darwin'",
+    "pyobjc-framework-cocoa>=10.1; sys_platform == 'darwin'",
     "pynput>=1.7.6",
     "pytesseract>=0.3.10",
 ]
@@ -34,3 +34,14 @@ line-length = 99
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
 ignore = ["RUF001", "RUF002", "RUF003"]
+
+[tool.ty.environment]
+python-version = "3.13"
+
+[tool.ty.rules]
+# Third-party stubs (pyobjc, cv2, tkinter) are incomplete or overly strict
+unresolved-import = "ignore"
+unresolved-attribute = "ignore"
+no-matching-overload = "ignore"
+# Tkinter **pad dict expansion and numpy.bool -> bool false positives
+invalid-argument-type = "warn"

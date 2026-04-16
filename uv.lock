@@ -445,8 +445,8 @@ dependencies = [
     { name = "pillow" },
     { name = "pyautogui" },
     { name = "pynput" },
-    { name = "pyobjc-framework-cocoa" },
-    { name = "pyobjc-framework-quartz" },
+    { name = "pyobjc-framework-cocoa", marker = "sys_platform == 'darwin'" },
+    { name = "pyobjc-framework-quartz", marker = "sys_platform == 'darwin'" },
     { name = "pytesseract" },
 ]
 
@@ -464,8 +464,8 @@ requires-dist = [
     { name = "pillow", specifier = ">=10.2.0" },
     { name = "pyautogui", specifier = ">=0.9.54" },
     { name = "pynput", specifier = ">=1.7.6" },
-    { name = "pyobjc-framework-cocoa", specifier = ">=10.1" },
-    { name = "pyobjc-framework-quartz", specifier = ">=10.1" },
+    { name = "pyobjc-framework-cocoa", marker = "sys_platform == 'darwin'", specifier = ">=10.1" },
+    { name = "pyobjc-framework-quartz", marker = "sys_platform == 'darwin'", specifier = ">=10.1" },
     { name = "pytesseract", specifier = ">=0.3.10" },
 ]
 

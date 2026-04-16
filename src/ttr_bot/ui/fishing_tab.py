@@ -264,9 +264,10 @@ class FishingTab:
 
             threading.Thread(target=_finish_recording, daemon=True).start()
         else:
-            self._recorder.on_status = lambda msg: self._root.after(
-                0, self._record_status.config, {"text": msg}
-            )
+            def _update_status(msg: str) -> None:
+                self._root.after(0, self._record_status.config, {"text": msg})
+
+            self._recorder.on_status = _update_status
             self._recorder.start()
             self._record_btn.config(text="Stop Recording")
             self._record_status.config(text="Fish normally — recording…")

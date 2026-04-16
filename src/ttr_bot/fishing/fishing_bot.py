@@ -432,7 +432,7 @@ class FishingBot:
             & (roi[:, :, 1] <= 90)
             & (roi[:, :, 2] >= 220)
         )
-        return np.sum(card) / card.size > 0.05
+        return bool(np.sum(card) / card.size > 0.05)
 
     def _wait_for_bite(self, win: WindowInfo) -> str:
         """Poll until a popup appears or timeout.
