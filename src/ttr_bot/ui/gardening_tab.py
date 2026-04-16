@@ -40,6 +40,10 @@ class GardeningTab:
         self._wire_callbacks()
         self._on_bean_count_changed()
 
+    @property
+    def running(self) -> bool:
+        return self._bot.running or self._routine_runner.running
+
     # ------------------------------------------------------------------
     # UI construction
     # ------------------------------------------------------------------
