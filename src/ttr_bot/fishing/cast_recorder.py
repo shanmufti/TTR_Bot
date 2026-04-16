@@ -179,14 +179,9 @@ class CastRecorder:
         """Find the drag endpoint — the position furthest from origin."""
         if not buf:
             return (0, 0)
-        best_dist = 0
-        best = buf[-1]
-        for pos in buf:
-            d = (pos[0] - origin[0]) ** 2 + (pos[1] - origin[1]) ** 2
-            if d > best_dist:
-                best_dist = d
-                best = pos
-        return best[0] - origin[0], best[1] - origin[1]
+        ox, oy = origin
+        best = max(buf, key=lambda p: (p[0] - ox) ** 2 + (p[1] - oy) ** 2)
+        return best[0] - ox, best[1] - oy
 
     def _record_one_cast(
         self,

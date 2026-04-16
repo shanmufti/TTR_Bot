@@ -83,6 +83,18 @@ def capture_window(window_info: WindowInfo | None = None) -> np.ndarray | None:
     return frame
 
 
+def grab_frame() -> np.ndarray | None:
+    """Find the TTR window and capture a frame in one call.
+
+    Convenience wrapper used by modules that just need a quick screenshot
+    without holding on to a WindowInfo.
+    """
+    win = find_ttr_window()
+    if win is None:
+        return None
+    return capture_window(win)
+
+
 def capture_region(window_info: WindowInfo, x: int, y: int, w: int, h: int) -> np.ndarray | None:
     """Capture a sub-region of the game window.
 

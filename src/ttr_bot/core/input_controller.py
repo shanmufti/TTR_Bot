@@ -215,13 +215,6 @@ def press_key(key: str, duration: float = 0.0) -> None:
         pyautogui.press(key)
 
 
-def hold_key(key: str, seconds: float) -> None:
-    """Hold a key down for *seconds*."""
-    pyautogui.keyDown(key)
-    time.sleep(seconds)
-    pyautogui.keyUp(key)
-
-
 def ensure_focused() -> bool:
     """Focus the TTR window, return True if successful."""
     return focus_window()

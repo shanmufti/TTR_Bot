@@ -48,66 +48,36 @@ def classify_bed_state(frame) -> str:
       5. nothing             → ``unknown``
     """
     t0 = time.monotonic()
+
     plant = tm.find_template(frame, "plant_flower_button", threshold=_CLASSIFY_THRESHOLD)
-    plant_ms = (time.monotonic() - t0) * 1000
     if plant is not None:
-        log.info("  classify: plant=%.3f(%.0fms) → plant", plant.confidence, plant_ms)
+        log.info("  classify → plant (conf=%.3f, %.0fms)", plant.confidence, _ms(t0))
         return "plant"
 
-    t1 = time.monotonic()
     pick = tm.find_template(frame, "pick_flower_button", threshold=_CLASSIFY_THRESHOLD)
-    pick_ms = (time.monotonic() - t1) * 1000
     if pick is not None:
-        log.info(
-            "  classify: plant=none(%.0fms) pick=%.3f(%.0fms) → pick",
-            plant_ms,
-            pick.confidence,
-            pick_ms,
-        )
+        log.info("  classify → pick (conf=%.3f, %.0fms)", pick.confidence, _ms(t0))
         return "pick"
 
-    t2 = time.monotonic()
     remove = tm.find_template(frame, "remove_button", threshold=_CLASSIFY_THRESHOLD)
-    remove_ms = (time.monotonic() - t2) * 1000
     if remove is not None:
-        log.info(
-            "  classify: plant=none(%.0fms) pick=none(%.0fms) remove=%.3f(%.0fms) → pick",
-            plant_ms,
-            pick_ms,
-            remove.confidence,
-            remove_ms,
-        )
+        log.info("  classify → pick via remove (conf=%.3f, %.0fms)", remove.confidence, _ms(t0))
         return "pick"
 
-    # If no primary button matched at the strict threshold, check whether the
-    # sidebar is visible at all via the watering-can (always present when near
-    # a bed).  If it is, retry the plant button at the default (looser)
-    # threshold — sometimes the plant template only scores ~0.79.
-    t3 = time.monotonic()
     water = tm.find_template(frame, "watering_can_button")
-    water_ms = (time.monotonic() - t3) * 1000
     if water is not None:
         plant_retry = tm.find_template(frame, "plant_flower_button")
         if plant_retry is not None:
             log.info(
-                "  classify: plant=%.3f(retry) water=%.3f(%.0fms) → plant",
-                plant_retry.confidence,
-                water.confidence,
-                water_ms,
+                "  classify → plant (retry conf=%.3f, %.0fms)", plant_retry.confidence, _ms(t0)
             )
             return "plant"
-        log.info(
-            "  classify: all=none water=%.3f(%.0fms) → unknown (sidebar visible)",
-            water.confidence,
-            water_ms,
-        )
+        log.info("  classify → unknown (sidebar visible, %.0fms)", _ms(t0))
+        return "unknown"
 
-    log.info(
-        "  classify: plant=none(%.0fms) pick=none(%.0fms) "
-        "remove=none(%.0fms) water=none(%.0fms) → unknown",
-        plant_ms,
-        pick_ms,
-        remove_ms,
-        water_ms,
-    )
+    log.info("  classify → unknown (%.0fms)", _ms(t0))
     return "unknown"
+
+
+def _ms(t0: float) -> float:
+    return (time.monotonic() - t0) * 1000

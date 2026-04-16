@@ -43,6 +43,15 @@ def is_enabled() -> bool:
     return _enabled
 
 
+def clear_pngs(directory: str | Path) -> None:
+    """Remove all ``*.png`` files from *directory*."""
+    d = Path(directory)
+    if not d.is_dir():
+        return
+    for p in d.glob("*.png"):
+        p.unlink(missing_ok=True)
+
+
 def _get_session_dir() -> Path:
     global _session_dir
     if _session_dir is None:

@@ -29,10 +29,11 @@ import pyautogui
 
 from ttr_bot.config import settings
 from ttr_bot.core import input_controller as inp
-from ttr_bot.core.screen_capture import capture_window
+from ttr_bot.core.screen_capture import capture_window, grab_frame
 from ttr_bot.core.window_manager import find_ttr_window
 from ttr_bot.gardening.bed_ui import BED_BUTTON_NAMES, classify_bed_state, detect_bed_button
 from ttr_bot.gardening.gardening_bot import GardenBot
+from ttr_bot.utils import debug_frames as dbg
 from ttr_bot.utils.logger import log
 from ttr_bot.vision import template_matcher as tm
 from ttr_bot.vision.flower_detector import debug_annotate, steering_hint
@@ -93,9 +94,7 @@ class GardenSweeper:
         t0 = time.monotonic()
 
         self._debug_seq = 0
-        for f in os.listdir(_DEBUG_DIR):
-            if f.endswith(".png"):
-                os.remove(os.path.join(_DEBUG_DIR, f))
+        dbg.clear_pngs(_DEBUG_DIR)
         self._status(f"Starting sweep — {flower_name}, target {target_beds} beds")
 
         if not self._bot.ensure_calibrated():
@@ -186,11 +185,9 @@ class GardenSweeper:
     # Walk-and-scan
     # ------------------------------------------------------------------
 
-    def _grab_frame(self):
-        win = find_ttr_window()
-        if win is None:
-            return None
-        return capture_window(win)
+    @staticmethod
+    def _grab_frame():
+        return grab_frame()
 
     def _walk_and_scan(
         self,
@@ -236,13 +233,8 @@ class GardenSweeper:
     # ------------------------------------------------------------------
 
     def _detect_bed(self) -> str | None:
-        win = find_ttr_window()
-        if win is None:
-            return None
-        frame = capture_window(win)
-        if frame is None:
-            return None
-        return detect_bed_button(frame)
+        frame = grab_frame()
+        return detect_bed_button(frame) if frame is not None else None
 
     def _interact_at_bed(
         self,
@@ -361,12 +353,7 @@ class GardenSweeper:
                 pyautogui.keyUp(k)
 
     def _interruptible_sleep(self, duration: float) -> bool:
-        deadline = time.monotonic() + duration
-        while time.monotonic() < deadline:
-            if self._stop_event.is_set():
-                return False
-            time.sleep(min(0.05, deadline - time.monotonic()))
-        return True
+        return not self._stop_event.wait(timeout=duration)
 
     # ------------------------------------------------------------------
     # Helpers

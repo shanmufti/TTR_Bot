@@ -138,18 +138,10 @@ def focus_window() -> bool:
         log.warning("Cannot focus: TTR window not found")
         return False
 
-    for app in NSRunningApplication.runningApplicationsWithBundleIdentifier_(""):
-        if app.processIdentifier() == info.pid:
-            app.activateWithOptions_(NSApplicationActivateIgnoringOtherApps)
-            return True
-
-    # Fallback: iterate all running apps by PID
-    from AppKit import NSWorkspace
-
-    for app in NSWorkspace.sharedWorkspace().runningApplications():
-        if app.processIdentifier() == info.pid:
-            app.activateWithOptions_(NSApplicationActivateIgnoringOtherApps)
-            return True
+    app = NSRunningApplication.runningApplicationWithProcessIdentifier_(info.pid)
+    if app is not None:
+        app.activateWithOptions_(NSApplicationActivateIgnoringOtherApps)
+        return True
 
     log.warning("TTR process found but could not activate (PID %d)", info.pid)
     return False

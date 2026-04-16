@@ -97,7 +97,6 @@ class FishingBot:
     # ------------------------------------------------------------------
 
     def _run(self) -> None:
-        dbg._reset_session()
         try:
             win = self._preflight()
             if win is None:

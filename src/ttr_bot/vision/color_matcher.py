@@ -52,10 +52,8 @@ def is_shadow_pixel_bgr(b: int, g: int, r: int) -> bool:
 
 def build_shadow_mask(frame_bgr: np.ndarray) -> np.ndarray:
     """Return a binary mask where fish-shadow-colored pixels are 255."""
-    b, g, r = cv2.split(frame_bgr)
-    b = b.astype(np.int16)
-    g = g.astype(np.int16)
-    r = r.astype(np.int16)
+    img = frame_bgr.astype(np.int16)
+    b, g, r = img[:, :, 0], img[:, :, 1], img[:, :, 2]
 
     brightness = (r + g + b) // 3
     bg_avg = (b + g) // 2
@@ -63,7 +61,7 @@ def build_shadow_mask(frame_bgr: np.ndarray) -> np.ndarray:
     mask = (
         (brightness <= settings.SHADOW_BRIGHTNESS_MAX)
         & ((bg_avg - r) >= settings.SHADOW_BLUE_GREEN_BIAS)
-        & (brightness > 20)  # reject pure black
+        & (brightness > 20)
     )
     return mask.astype(np.uint8) * 255
 

@@ -28,10 +28,6 @@ class FishCandidate(NamedTuple):
     has_bubbles: bool
 
 
-SHADOW_MIN_AREA = settings.SHADOW_MIN_AREA
-SHADOW_MAX_AREA = settings.SHADOW_MAX_AREA
-_SHADOW_MAX_DIM = settings.SHADOW_MAX_DIM
-
 _RING_OFFSETS = np.array(
     [
         (
@@ -70,7 +66,7 @@ def _filter_blob(
     from ttr_bot.vision.bubble_detector import has_bubbles_above
 
     area = stats[label_id, cv2.CC_STAT_AREA]
-    if area < SHADOW_MIN_AREA or area > SHADOW_MAX_AREA:
+    if area < settings.SHADOW_MIN_AREA or area > settings.SHADOW_MAX_AREA:
         rejected["area"] += 1
         return None
 
@@ -79,7 +75,7 @@ def _filter_blob(
     if bw < settings.SHADOW_MIN_SIZE or bh < settings.SHADOW_MIN_SIZE:
         rejected["size"] += 1
         return None
-    if bw > _SHADOW_MAX_DIM or bh > _SHADOW_MAX_DIM:
+    if bw > settings.SHADOW_MAX_DIM or bh > settings.SHADOW_MAX_DIM:
         rejected["size"] += 1
         return None
 
@@ -190,10 +186,6 @@ def detect_fish_shadows(
     return candidates
 
 
-_BUBBLE_SCORE_BOOST = settings.FISH_BUBBLE_SCORE_BOOST
-_NEAR_THRESHOLD = settings.FISH_NEAR_THRESHOLD
-
-
 def rank_fish(
     frame_bgr: np.ndarray,
     pond: PondArea,
@@ -216,7 +208,7 @@ def rank_fish(
         rel_y = (c.cy - pond.y) / max(1, pond.height)
         depth = 1.0 - 2.0 * abs(rel_y - 0.35)
         centered = 1.0 - abs(c.cx - pond_cx) / max(1, pond.width // 2)
-        bubble = _BUBBLE_SCORE_BOOST if c.has_bubbles else 0.0
+        bubble = settings.FISH_BUBBLE_SCORE_BOOST if c.has_bubbles else 0.0
         return c.score + max(0.0, depth) * 0.4 + centered * 0.2 + bubble
 
     scored = [(c.cx, c.cy, _score(c)) for c in candidates]
@@ -246,7 +238,7 @@ def find_best_fish(
     for cx, cy, sc in ranked:
         if avoid is not None:
             dist = ((cx - avoid[0]) ** 2 + (cy - avoid[1]) ** 2) ** 0.5
-            if dist < _NEAR_THRESHOLD:
+            if dist < settings.FISH_NEAR_THRESHOLD:
                 log.info("find_best_fish: skipping (%d,%d) too close to avoid target", cx, cy)
                 continue
         log.info("find_best_fish: picking (%d,%d) score=%.2f", cx, cy, sc)
@@ -266,11 +258,5 @@ def has_catch_popup(frame: np.ndarray) -> bool:
     h, w = frame.shape[:2]
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
     roi = hsv[h // 6 : h // 2, w // 4 : 3 * w // 4]
-    card = (
-        (roi[:, :, 0] >= 25)
-        & (roi[:, :, 0] <= 35)
-        & (roi[:, :, 1] >= 40)
-        & (roi[:, :, 1] <= 90)
-        & (roi[:, :, 2] >= 220)
-    )
-    return bool(np.sum(card) / card.size > 0.05)
+    card = cv2.inRange(roi, (25, 40, 220), (35, 90, 255))
+    return bool(np.count_nonzero(card) / card.size > 0.05)

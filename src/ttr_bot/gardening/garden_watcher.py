@@ -22,10 +22,10 @@ from dataclasses import dataclass
 import cv2
 
 from ttr_bot.config import settings
-from ttr_bot.core.screen_capture import capture_window
-from ttr_bot.core.window_manager import find_ttr_window
+from ttr_bot.core.screen_capture import grab_frame
 from ttr_bot.gardening.bed_ui import classify_bed_state
 from ttr_bot.gardening.gardening_bot import GardenBot
+from ttr_bot.utils import debug_frames as dbg
 from ttr_bot.utils.logger import log
 
 _DEBUG_DIR = os.path.join(settings.DATA_DIR, "_debug", "watcher")
@@ -67,9 +67,7 @@ class GardenWatcher:
         t0 = time.monotonic()
 
         self._debug_seq = 0
-        for f in os.listdir(_DEBUG_DIR):
-            if f.endswith(".png"):
-                os.remove(os.path.join(_DEBUG_DIR, f))
+        dbg.clear_pngs(_DEBUG_DIR)
 
         self._status(f"Watching — walk to beds, I'll handle the rest ({flower_name})")
 
@@ -186,11 +184,8 @@ class GardenWatcher:
         log.info("[Watcher] stop requested during new-bed wait")
 
     def _grab_frame(self):
-        win = find_ttr_window()
-        if win is None:
-            return None
         t0 = time.monotonic()
-        frame = capture_window(win)
+        frame = grab_frame()
         self._last_grab_ms = (time.monotonic() - t0) * 1000
         return frame
 
