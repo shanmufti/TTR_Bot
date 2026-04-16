@@ -324,6 +324,113 @@ def _single_capture(filename: str, description: str) -> None:
     print(f"{'=' * 60}")
 
 
+_ALL_TEMPLATES = (
+    FISHING_TEMPLATES
+    + GARDEN_STEP1_EMPTY_BED
+    + GARDEN_STEP2_BEAN_PICKER
+    + GARDEN_STEP3_POST_PLANT
+    + GARDEN_STEP4_PLANTED_BED
+    + GOLF_STEP1_PENCIL
+    + GOLF_STEP2_SCOREBOARD
+    + GOLF_STEP3_TURN_TIMER
+)
+
+
+def _capture_step(
+    prompt: str,
+    templates: list[tuple[str, str]],
+) -> list[tuple[str, str, np.ndarray]]:
+    """Print *prompt*, wait for Enter, capture a frame, and pair it with *templates*."""
+    print(prompt)
+    input("Press Enter when ready...")
+    frame = _capture_frame()
+    return [(f, d, frame) for f, d in templates]
+
+
+def _run_and_report(tasks: list[tuple[str, str, np.ndarray]]) -> None:
+    """Open the CaptureApp for *tasks* and print a summary."""
+    print(f"\nOpening selector — {len(tasks)} templates to capture.\n")
+    app = CaptureApp(tasks)
+    app.run()
+    print(f"\n{'=' * 60}")
+    print(f"  Done! Captured {app.saved_count}/{len(tasks)} templates.")
+    print(f"  Templates saved in: {TEMPLATES_DIR}")
+    print(f"{'=' * 60}")
+
+
+def _build_golf_tasks() -> list[tuple[str, str, np.ndarray]]:
+    tasks: list[tuple[str, str, np.ndarray]] = []
+    tasks.extend(
+        _capture_step(
+            "STEP 1: On a GOLF COURSE. The pencil / scoreboard icon must be visible.\n"
+            "         (Do not open the scoreboard yet.)",
+            GOLF_STEP1_PENCIL,
+        )
+    )
+    print()
+    tasks.extend(
+        _capture_step(
+            "STEP 2: In-game, OPEN the scoreboard (click the pencil).\n"
+            "         The cream/yellow scoreboard with the RED X close must show.",
+            GOLF_STEP2_SCOREBOARD,
+        )
+    )
+    print()
+    tasks.extend(
+        _capture_step(
+            "STEP 3: Close the scoreboard. Wait until it is YOUR TURN to swing.\n"
+            "         The ORANGE countdown clock should appear top-right.",
+            GOLF_STEP3_TURN_TIMER,
+        )
+    )
+    return tasks
+
+
+def _build_gardening_tasks() -> list[tuple[str, str, np.ndarray]]:
+    tasks: list[tuple[str, str, np.ndarray]] = []
+    tasks.extend(
+        _capture_step(
+            "STEP 1: Click on an EMPTY flower bed in-game.\n"
+            "        The 'Plant Flower' button should appear.",
+            GARDEN_STEP1_EMPTY_BED,
+        )
+    )
+    print()
+    tasks.extend(
+        _capture_step(
+            "STEP 2: Now click 'Plant Flower' in-game to open the\n"
+            "        jellybean picker. All 9 bean color buttons and\n"
+            "        the blue Plant button should be visible.",
+            GARDEN_STEP2_BEAN_PICKER,
+        )
+    )
+    print()
+    tasks.extend(
+        _capture_step(
+            "STEP 3: Now actually plant a flower (pick beans + click Plant).\n"
+            "        An OK/confirmation dialog should appear on screen.",
+            GARDEN_STEP3_POST_PLANT,
+        )
+    )
+    print()
+    tasks.extend(
+        _capture_step(
+            "STEP 4: Dismiss the OK dialog. Click on a flower bed that\n"
+            "        HAS a plant in it. The Watering Can button should appear.",
+            GARDEN_STEP4_PLANTED_BED,
+        )
+    )
+    return tasks
+
+
+def _build_fishing_tasks() -> list[tuple[str, str, np.ndarray]]:
+    return _capture_step(
+        "Make sure you're at a FISHING DOCK in TTR.\n"
+        "(The red cast button should be visible on screen.)",
+        FISHING_TEMPLATES,
+    )
+
+
 def main():
     gardening_mode = "--gardening" in sys.argv or "-g" in sys.argv
     golf_mode = "--golf" in sys.argv
@@ -333,21 +440,11 @@ def main():
             single_template = arg.split("=", 1)[1]
 
     if single_template:
-        all_templates = (
-            FISHING_TEMPLATES
-            + GARDEN_STEP1_EMPTY_BED
-            + GARDEN_STEP2_BEAN_PICKER
-            + GARDEN_STEP3_POST_PLANT
-            + GARDEN_STEP4_PLANTED_BED
-            + GOLF_STEP1_PENCIL
-            + GOLF_STEP2_SCOREBOARD
-            + GOLF_STEP3_TURN_TIMER
-        )
-        match = next(((f, d) for f, d in all_templates if f == single_template), None)
+        match = next(((f, d) for f, d in _ALL_TEMPLATES if f == single_template), None)
         if match is None:
             print(f"ERROR: Unknown template '{single_template}'")
             print("Available templates:")
-            for f, d in all_templates:
+            for f, d in _ALL_TEMPLATES:
                 print(f"  {f}  — {d}")
             sys.exit(1)
         _single_capture(match[0], match[1])
@@ -357,106 +454,20 @@ def main():
         print("ERROR: Use only one of --gardening or --golf")
         sys.exit(1)
 
-    if gardening_mode:
-        mode_name = "Gardening"
-    elif golf_mode:
-        mode_name = "Golf"
-    else:
-        mode_name = "Fishing"
-
+    mode_name = "Golf" if golf_mode else ("Gardening" if gardening_mode else "Fishing")
     print("=" * 60)
     print(f"  TTR Bot — {mode_name} Template Capture Tool")
     print("=" * 60)
     print()
 
     if golf_mode:
-        tasks: list[tuple[str, str, np.ndarray]] = []
-
-        print("STEP 1: On a GOLF COURSE. The pencil / scoreboard icon must be visible.")
-        print("         (Do not open the scoreboard yet.)")
-        input("Press Enter when ready...")
-        frame_g1 = _capture_frame()
-        for filename, desc in GOLF_STEP1_PENCIL:
-            tasks.append((filename, desc, frame_g1))
-
-        print()
-        print("STEP 2: In-game, OPEN the scoreboard (click the pencil).")
-        print("         The cream/yellow scoreboard with the RED X close must show.")
-        input("Press Enter when the scoreboard is open...")
-        frame_g2 = _capture_frame()
-        for filename, desc in GOLF_STEP2_SCOREBOARD:
-            tasks.append((filename, desc, frame_g2))
-
-        print()
-        print("STEP 3: Close the scoreboard. Wait until it is YOUR TURN to swing.")
-        print("         The ORANGE countdown clock should appear top-right.")
-        input("Press Enter when the turn timer is visible...")
-        frame_g3 = _capture_frame()
-        for filename, desc in GOLF_STEP3_TURN_TIMER:
-            tasks.append((filename, desc, frame_g3))
-
-        print(f"\nOpening selector — {len(tasks)} templates to capture.\n")
-
-        app = CaptureApp(tasks)
-        app.run()
-
-        print(f"\n{'=' * 60}")
-        print(f"  Done! Captured {app.saved_count}/{len(tasks)} templates.")
-        print(f"  Templates saved in: {TEMPLATES_DIR}")
-        print(f"{'=' * 60}")
-        return
-
-    if gardening_mode:
-        tasks: list[tuple[str, str, np.ndarray]] = []
-
-        print("STEP 1: Click on an EMPTY flower bed in-game.")
-        print("        The 'Plant Flower' button should appear.")
-        input("Press Enter when ready...")
-        frame1 = _capture_frame()
-        for filename, desc in GARDEN_STEP1_EMPTY_BED:
-            tasks.append((filename, desc, frame1))
-
-        print()
-        print("STEP 2: Now click 'Plant Flower' in-game to open the")
-        print("        jellybean picker. All 9 bean color buttons and")
-        print("        the blue Plant button should be visible.")
-        input("Press Enter when ready...")
-        frame2 = _capture_frame()
-        for filename, desc in GARDEN_STEP2_BEAN_PICKER:
-            tasks.append((filename, desc, frame2))
-
-        print()
-        print("STEP 3: Now actually plant a flower (pick beans + click Plant).")
-        print("        An OK/confirmation dialog should appear on screen.")
-        input("Press Enter when the OK dialog is visible...")
-        frame3 = _capture_frame()
-        for filename, desc in GARDEN_STEP3_POST_PLANT:
-            tasks.append((filename, desc, frame3))
-
-        print()
-        print("STEP 4: Dismiss the OK dialog. Click on a flower bed that")
-        print("        HAS a plant in it. The Watering Can button should appear.")
-        input("Press Enter when ready...")
-        frame4 = _capture_frame()
-        for filename, desc in GARDEN_STEP4_PLANTED_BED:
-            tasks.append((filename, desc, frame4))
-
+        tasks = _build_golf_tasks()
+    elif gardening_mode:
+        tasks = _build_gardening_tasks()
     else:
-        print("Make sure you're at a FISHING DOCK in TTR.")
-        print("(The red cast button should be visible on screen.)")
-        input("Press Enter when ready...")
-        frame = _capture_frame()
-        tasks = [(f, d, frame) for f, d in FISHING_TEMPLATES]
+        tasks = _build_fishing_tasks()
 
-    print(f"\nOpening selector — {len(tasks)} templates to capture.\n")
-
-    app = CaptureApp(tasks)
-    app.run()
-
-    print(f"\n{'=' * 60}")
-    print(f"  Done! Captured {app.saved_count}/{len(tasks)} templates.")
-    print(f"  Templates saved in: {TEMPLATES_DIR}")
-    print(f"{'=' * 60}")
+    _run_and_report(tasks)
 
 
 if __name__ == "__main__":

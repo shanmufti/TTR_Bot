@@ -116,6 +116,38 @@ def count_executable_actions(actions: list[GolfActionCommand]) -> int:
     return sum(1 for a in actions if a.action not in _SKIPPED)
 
 
+def _next_action_label(actions: list[GolfActionCommand], after_index: int) -> str:
+    """Return the name of the next executable action, or ``"Done"``."""
+    for j in range(after_index + 1, len(actions)):
+        if actions[j].action not in _SKIPPED:
+            return actions[j].action
+    return "Done"
+
+
+def _interruptible_delay(seconds: float, stop_event: threading.Event) -> bool:
+    """Sleep for *seconds*, checking *stop_event*. Returns True if interrupted."""
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        if stop_event.is_set():
+            return True
+        time.sleep(min(0.1, deadline - time.monotonic()))
+    return False
+
+
+def _hold_key(key: str, seconds: float, stop_event: threading.Event) -> bool:
+    """Hold *key* for *seconds*, releasing early on stop. Returns True if interrupted."""
+    pyautogui.keyDown(key)
+    try:
+        end = time.monotonic() + seconds
+        while time.monotonic() < end:
+            if stop_event.is_set():
+                return True
+            time.sleep(min(0.05, end - time.monotonic()))
+    finally:
+        pyautogui.keyUp(key)
+    return False
+
+
 def perform_golf_actions(
     file_path: str,
     stop_event: threading.Event,
@@ -132,11 +164,7 @@ def perform_golf_actions(
     step_i = 0
     t_replay = perf_counter()
 
-    log.info(
-        "Golf [replay] — start %s (%d executable steps)",
-        os.path.basename(file_path),
-        total,
-    )
+    log.info("Golf [replay] — start %s (%d executable steps)", os.path.basename(file_path), total)
 
     inp.ensure_focused()
     time.sleep(1.0)
@@ -151,13 +179,7 @@ def perform_golf_actions(
             continue
 
         step_i += 1
-
-        next_label = "Done"
-        for j in range(i + 1, len(actions)):
-            if actions[j].action not in _SKIPPED:
-                next_label = actions[j].action
-                break
-
+        next_label = _next_action_label(actions, i)
         if on_step:
             on_step(step_i, total, cmd.action, next_label, cmd.duration)
 
@@ -173,15 +195,9 @@ def perform_golf_actions(
         )
 
         if cmd.action == "DELAY TIME":
-            deadline = time.monotonic() + cmd.duration / 1000.0
-            while time.monotonic() < deadline:
-                if stop_event.is_set():
-                    return
-                time.sleep(min(0.1, deadline - time.monotonic()))
-            log.info(
-                "Golf [replay] — DELAY TIME done in %.2fs",
-                perf_counter() - t_step,
-            )
+            if _interruptible_delay(cmd.duration / 1000.0, stop_event):
+                return
+            log.info("Golf [replay] — DELAY TIME done in %.2fs", perf_counter() - t_step)
             continue
 
         key = _ACTION_KEYS.get(cmd.action)
@@ -189,26 +205,13 @@ def perform_golf_actions(
             log.error("Unsupported golf action: %s", cmd.action)
             return
 
-        hold_s = cmd.duration / 1000.0
-        pyautogui.keyDown(key)
-        try:
-            end = time.monotonic() + hold_s
-            while time.monotonic() < end:
-                if stop_event.is_set():
-                    pyautogui.keyUp(key)
-                    return
-                time.sleep(min(0.05, end - time.monotonic()))
-        finally:
-            pyautogui.keyUp(key)
+        if _hold_key(key, cmd.duration / 1000.0, stop_event):
+            return
         log.info(
             "Golf [replay] — key %s held %.2fs (step wall %.2fs)",
             key,
-            hold_s,
+            cmd.duration / 1000.0,
             perf_counter() - t_step,
         )
 
-    log.info(
-        "Golf [replay] — completed %s in %.1fs",
-        file_path,
-        perf_counter() - t_replay,
-    )
+    log.info("Golf [replay] — completed %s in %.1fs", file_path, perf_counter() - t_replay)

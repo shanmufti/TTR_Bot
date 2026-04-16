@@ -76,6 +76,33 @@ def save_masks(frame, pond, label):
     print(f"  Shadow pixels: {np.count_nonzero(shadow_clean)} / {shadow_clean.size}")
 
 
+def _analyze_frame(frame, pond, avg_bright, label):
+    """Detect shadows, save masks and annotated image, print candidates."""
+    candidates = detect_fish_shadows(frame, pond, avg_bright)
+    best = find_best_fish(frame, pond, avg_bright)
+    save_masks(frame, pond, label)
+    annotated = annotate_frame(frame, pond, candidates, best, label)
+    cv2.imwrite(f"{OUT}/shadow_{label}_annotated.png", annotated)
+    print(f"  Candidates: {len(candidates)}")
+    for c in candidates:
+        print(f"    ({c.cx},{c.cy}) area={c.size} score={c.score:.2f} bubbles={c.has_bubbles}")
+    return candidates
+
+
+def _print_movement(c1, c2):
+    """Compare two candidate lists and report which shadows moved."""
+    print("\n--- Movement analysis ---")
+    for i, s1 in enumerate(c1):
+        closest = min(c2, key=lambda s: abs(s.cx - s1.cx) + abs(s.cy - s1.cy))
+        dx = closest.cx - s1.cx
+        dy = closest.cy - s1.cy
+        state = "MOVED" if abs(dx) > 10 or abs(dy) > 10 else "STATIC"
+        print(
+            f"  Shadow {i}: ({s1.cx},{s1.cy}) -> ({closest.cx},{closest.cy})"
+            f" delta=({dx:+d},{dy:+d}) {state}"
+        )
+
+
 def main():
     import os
 
@@ -88,7 +115,6 @@ def main():
 
     print(f"Window: {win.width}x{win.height}")
 
-    # Frame 1
     f1 = capture_window(win)
     if f1 is None:
         print("Capture failed")
@@ -107,16 +133,8 @@ def main():
     print(f"Water brightness: {avg_bright}")
 
     print("\n--- Frame 1 ---")
-    c1 = detect_fish_shadows(f1, pond, avg_bright)
-    b1 = find_best_fish(f1, pond, avg_bright)
-    save_masks(f1, pond, "f1")
-    ann1 = annotate_frame(f1, pond, c1, b1, "Frame 1")
-    cv2.imwrite(f"{OUT}/shadow_f1_annotated.png", ann1)
-    print(f"  Candidates: {len(c1)}")
-    for c in c1:
-        print(f"    ({c.cx},{c.cy}) area={c.size} score={c.score:.2f} bubbles={c.has_bubbles}")
+    c1 = _analyze_frame(f1, pond, avg_bright, "f1")
 
-    # Wait and capture frame 2
     print("\nWaiting 3s for shadows to move...")
     time.sleep(3.0)
 
@@ -126,40 +144,14 @@ def main():
         return
 
     print("--- Frame 2 ---")
-    c2 = detect_fish_shadows(f2, pond, avg_bright)
-    b2 = find_best_fish(f2, pond, avg_bright)
-    save_masks(f2, pond, "f2")
-    ann2 = annotate_frame(f2, pond, c2, b2, "Frame 2 (+3s)")
-    cv2.imwrite(f"{OUT}/shadow_f2_annotated.png", ann2)
-    print(f"  Candidates: {len(c2)}")
-    for c in c2:
-        print(f"    ({c.cx},{c.cy}) area={c.size} score={c.score:.2f} bubbles={c.has_bubbles}")
+    c2 = _analyze_frame(f2, pond, avg_bright, "f2")
 
-    # Compare — did anything move?
     if c1 and c2:
-        print("\n--- Movement analysis ---")
-        for i, s1 in enumerate(c1):
-            closest = min(c2, key=lambda s: abs(s.cx - s1.cx) + abs(s.cy - s1.cy))
-            dx = closest.cx - s1.cx
-            dy = closest.cy - s1.cy
-            moved = abs(dx) > 10 or abs(dy) > 10
-            state = "MOVED" if moved else "STATIC"
-            print(
-                f"  Shadow {i}: ({s1.cx},{s1.cy}) -> ({closest.cx},{closest.cy})"
-                f" delta=({dx:+d},{dy:+d}) {state}"
-            )
+        _print_movement(c1, c2)
 
-    # Test the combined motion-based best-fish picker
     print("\n--- Motion-based best fish (new method) ---")
-
-    def _cap():
-        return capture_window(win)
-
-    best_moving = find_best_moving_fish(_cap, pond, avg_bright)
-    if best_moving:
-        print(f"  Best moving fish: {best_moving}")
-    else:
-        print("  No moving fish found")
+    best_moving = find_best_moving_fish(lambda: capture_window(win), pond, avg_bright)
+    print(f"  Best moving fish: {best_moving}" if best_moving else "  No moving fish found")
 
     print(f"\nSaved to {OUT}/shadow_*.png")
 

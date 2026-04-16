@@ -216,28 +216,32 @@ class GardenBot:
             self._notify_status("Window not found")
             return False
 
-        # Step 1: Click "Plant Flower" button
+        if not self._click_plant_button(win):
+            return False
+        if not self._select_beans(bean_sequence, win):
+            return False
+        if not self._confirm_plant(flower_name):
+            return False
+
+        log.info("[Timing] _do_plant total=%.0fms", (time.monotonic() - plant_t0) * 1000)
+        log.info("Planted %s successfully", flower_name)
+        return True
+
+    def _click_plant_button(self, win: WindowInfo) -> bool:
+        """Click the "Plant Flower" button and wait for the dialog."""
         t0 = time.monotonic()
         if not self._find_and_click("plant_flower_button", win=win):
             self._notify_status("Plant Flower button not found")
             return False
         log.info("[Timing] plant_btn_click=%.0fms", (time.monotonic() - t0) * 1000)
-
-        t0 = time.monotonic()
         time.sleep(settings.GARDEN_POST_CONFIRM_DELAY_S)
-        log.info(
-            "[Timing] post_plant_btn_wait=%.0fms (POST_CONFIRM_DELAY=%.2fs)",
-            (time.monotonic() - t0) * 1000,
-            settings.GARDEN_POST_CONFIRM_DELAY_S,
-        )
+        return True
 
-        # Step 2: Click each jellybean in the recipe.
-        # Bean picker buttons don't move while the dialog is open, but the
-        # placed beans in the recipe slots also match the same template.
-        # We remember each bean button's position within this dialog so
-        # repeat clicks hit the picker, not the recipe display.
+    def _select_beans(self, bean_sequence: str, win: WindowInfo) -> bool:
+        """Click each jellybean in the recipe, caching positions for repeats."""
         beans_t0 = time.monotonic()
         bean_positions: dict[str, tuple[int, int]] = {}
+
         for i, bean_char in enumerate(bean_sequence):
             if self._stop_event.is_set():
                 return False
@@ -283,40 +287,23 @@ class GardenBot:
             (time.monotonic() - beans_t0) * 1000,
             len(bean_sequence),
         )
+        return True
 
-        # Step 3: Click "Plant" confirmation button
+    def _confirm_plant(self, flower_name: str) -> bool:
+        """Confirm the plant, dismiss the OK dialog, and water if configured."""
         t0 = time.monotonic()
         if not self._find_and_click("blue_plant_button"):
             self._notify_status("Plant confirmation button not found")
             return False
         log.info("[Timing] plant_confirm_click=%.0fms", (time.monotonic() - t0) * 1000)
-
-        t0 = time.monotonic()
         time.sleep(settings.GARDEN_POST_PLANT_DELAY_S)
-        log.info(
-            "[Timing] plant_anim_wait=%.0fms (POST_PLANT_DELAY=%.1fs)",
-            (time.monotonic() - t0) * 1000,
-            settings.GARDEN_POST_PLANT_DELAY_S,
-        )
 
-        # Step 4: Click "OK" on the result dialog (may not appear on all flowers)
         t0 = time.monotonic()
         ok_found = self._find_and_click("ok_button", timeout=8.0)
         ok_ms = (time.monotonic() - t0) * 1000
-        if ok_found:
-            log.info("[Timing] ok_btn_click=%.0fms", ok_ms)
-        else:
-            log.info("[Timing] ok_btn_timeout=%.0fms (not found)", ok_ms)
-
-        t0 = time.monotonic()
+        log.info("[Timing] ok_btn_%s=%.0fms", "click" if ok_found else "timeout", ok_ms)
         time.sleep(settings.GARDEN_POST_CONFIRM_DELAY_S)
-        log.info(
-            "[Timing] post_ok_wait=%.0fms (POST_CONFIRM_DELAY=%.2fs)",
-            (time.monotonic() - t0) * 1000,
-            settings.GARDEN_POST_CONFIRM_DELAY_S,
-        )
 
-        # Step 5: Water the newly planted flower (if configured)
         if settings.GARDEN_WATERS_AFTER_PLANT > 0:
             self._notify_status(f"Watering new {flower_name}…")
             t0 = time.monotonic()
@@ -325,8 +312,6 @@ class GardenBot:
                 return False
             log.info("[Timing] water_after_plant=%.0fms", (time.monotonic() - t0) * 1000)
 
-        log.info("[Timing] _do_plant total=%.0fms", (time.monotonic() - plant_t0) * 1000)
-        log.info("Planted %s successfully", flower_name)
         return True
 
     def water_plant(self, count: int) -> bool:

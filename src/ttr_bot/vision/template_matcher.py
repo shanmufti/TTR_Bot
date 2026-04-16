@@ -133,8 +133,56 @@ class TemplateMatcher:
         self._downsample_factor = 2 if fw >= 1800 else 1
         log.info("calibrate_scale: frame=%dx%d downsample=%dx", fw, fh, self._downsample_factor)
 
-        overall_best_val = -1.0
-        overall_best_scale = 1.0
+        best_anchor, best_scale, best_val = self._coarse_anchor_scan(frame_bgr)
+
+        if best_val < 0.30:
+            log.warning(
+                "calibrate_scale FAILED: best conf=%.3f (no usable match). "
+                "Run: uv run python tools/snapshot_game_state.py --promote-template",
+                best_val,
+            )
+            self._global_scale = None
+            return -1.0
+
+        best_scale, best_val = self._fine_tune(frame_bgr, best_anchor, best_scale, best_val)
+
+        if best_val < _MIN_CALIBRATION_CONF_RELAXED:
+            log.warning(
+                "calibrate_scale FAILED: best conf=%.3f (need %.2f). "
+                "Recapture HUD with tools/snapshot_game_state.py --promote-template",
+                best_val,
+                _MIN_CALIBRATION_CONF_RELAXED,
+            )
+            self._global_scale = None
+            return -1.0
+
+        self._global_scale = best_scale
+        cal_ms = (time.monotonic() - t_cal) * 1000
+        if best_val < _MIN_CALIBRATION_CONF:
+            log.warning(
+                "calibrate_scale: relaxed accept anchor=%s scale=%.2f (conf=%.3f) %.0fms",
+                best_anchor,
+                best_scale,
+                best_val,
+                cal_ms,
+            )
+        else:
+            log.info(
+                "calibrate_scale: anchor=%s scale=%.2f (conf=%.3f) — locked (%.0fms)",
+                best_anchor,
+                best_scale,
+                best_val,
+                cal_ms,
+            )
+        return best_scale
+
+    def _coarse_anchor_scan(
+        self,
+        frame_bgr: np.ndarray,
+    ) -> tuple[str, float, float]:
+        """Try each anchor at coarse scales, return (anchor, scale, confidence)."""
+        best_val = -1.0
+        best_scale = 1.0
         best_anchor = ""
 
         for anchor in _CALIBRATION_ANCHORS:
@@ -159,67 +207,42 @@ class TemplateMatcher:
                 (time.monotonic() - t_anchor) * 1000,
             )
 
-            if anchor_best > overall_best_val:
-                overall_best_val = anchor_best
-                overall_best_scale = anchor_scale
+            if anchor_best > best_val:
+                best_val = anchor_best
+                best_scale = anchor_scale
                 best_anchor = anchor
 
-            if overall_best_val >= _MIN_CALIBRATION_CONF:
+            if best_val >= _MIN_CALIBRATION_CONF:
                 break
 
-        if overall_best_val < 0.30:
-            log.warning(
-                "calibrate_scale FAILED: best conf=%.3f (no usable match). "
-                "Run: uv run python tools/snapshot_game_state.py --promote-template",
-                overall_best_val,
-            )
-            self._global_scale = None
-            return -1.0
+        return best_anchor, best_scale, best_val
 
+    def _fine_tune(
+        self,
+        frame_bgr: np.ndarray,
+        anchor: str,
+        coarse_scale: float,
+        coarse_val: float,
+    ) -> tuple[float, float]:
+        """Refine the scale around *coarse_scale*. Returns (scale, confidence)."""
         t_fine = time.monotonic()
-        tmpl = self._load_template(best_anchor)
+        tmpl = self._load_template(anchor)
+        best_scale, best_val = coarse_scale, coarse_val
+
         if tmpl is not None:
             fine_range = np.arange(
-                overall_best_scale - 0.08,
-                overall_best_scale + 0.08 + _FINE_STEP,
+                coarse_scale - 0.08,
+                coarse_scale + 0.08 + _FINE_STEP,
                 _FINE_STEP,
             )
             for scale in fine_range:
                 val = self._match_at_scale(frame_bgr, tmpl, scale)
-                if val > overall_best_val:
-                    overall_best_val = val
-                    overall_best_scale = scale
+                if val > best_val:
+                    best_val = val
+                    best_scale = scale
+
         log.info("calibrate fine-tune: %.0fms", (time.monotonic() - t_fine) * 1000)
-
-        if overall_best_val < _MIN_CALIBRATION_CONF_RELAXED:
-            log.warning(
-                "calibrate_scale FAILED: best conf=%.3f (need %.2f). "
-                "Recapture HUD with tools/snapshot_game_state.py --promote-template",
-                overall_best_val,
-                _MIN_CALIBRATION_CONF_RELAXED,
-            )
-            self._global_scale = None
-            return -1.0
-
-        self._global_scale = overall_best_scale
-        cal_ms = (time.monotonic() - t_cal) * 1000
-        if overall_best_val < _MIN_CALIBRATION_CONF:
-            log.warning(
-                "calibrate_scale: relaxed accept anchor=%s scale=%.2f (conf=%.3f) %.0fms",
-                best_anchor,
-                overall_best_scale,
-                overall_best_val,
-                cal_ms,
-            )
-        else:
-            log.info(
-                "calibrate_scale: anchor=%s scale=%.2f (conf=%.3f) — locked (%.0fms)",
-                best_anchor,
-                overall_best_scale,
-                overall_best_val,
-                cal_ms,
-            )
-        return overall_best_scale
+        return best_scale, best_val
 
     # ------------------------------------------------------------------
     # Scaled template helpers

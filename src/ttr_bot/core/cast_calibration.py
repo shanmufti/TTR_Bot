@@ -35,6 +35,57 @@ class CalibrationSample(NamedTuple):
     land_dy: float
 
 
+_BOBBER_MIN_AREA = 50
+_BOBBER_MAX_AREA = 5000
+
+
+def _debug_bobber_frames(
+    before: np.ndarray,
+    after: np.ndarray,
+    thresh: np.ndarray,
+    contours: list,
+    roi: tuple[int, int, int, int],
+    drag_label: str,
+) -> None:
+    """Write before/after/diff debug images for bobber detection."""
+    from ttr_bot.utils import debug_frames as dbg
+
+    x1, y1, x2, y2 = roi
+    rect_ann = {
+        "type": "rect",
+        "pt1": (x1, y1),
+        "pt2": (x2, y2),
+        "color": (0, 255, 0),
+        "thickness": 1,
+    }
+    dbg.save(before, f"cal_{drag_label}_before", annotations=[rect_ann])
+    dbg.save(after, f"cal_{drag_label}_after", annotations=[rect_ann])
+
+    diff_vis = cv2.cvtColor(thresh, cv2.COLOR_GRAY2BGR)
+    full_diff = np.zeros_like(before)
+    full_diff[y1:y2, x1:x2] = diff_vis
+    diff_anns: list[dict] = [rect_ann]
+    for c in contours:
+        area_c = cv2.contourArea(c)
+        m = cv2.moments(c)
+        if m["m00"] > 0:
+            bx = int(m["m10"] / m["m00"]) + x1
+            by = int(m["m01"] / m["m00"]) + y1
+            diff_anns.append(
+                {"type": "circle", "center": (bx, by), "radius": 8, "color": (0, 255, 255)}
+            )
+            diff_anns.append(
+                {
+                    "type": "text",
+                    "pos": (bx + 10, by),
+                    "text": f"a={area_c}",
+                    "color": (0, 255, 255),
+                    "thickness": 1,
+                }
+            )
+    dbg.save(full_diff, f"cal_{drag_label}_diff", annotations=diff_anns)
+
+
 def detect_bobber(
     before: np.ndarray,
     after: np.ndarray,
@@ -66,10 +117,7 @@ def detect_bobber(
     y1, y2 = max(0, y1), min(h, y2)
     x1, x2 = max(0, x1), min(w, x2)
 
-    roi_before = gray_before[y1:y2, x1:x2]
-    roi_after = gray_after[y1:y2, x1:x2]
-
-    diff = cv2.absdiff(roi_after, roi_before)
+    diff = cv2.absdiff(gray_after[y1:y2, x1:x2], gray_before[y1:y2, x1:x2])
     diff = cv2.GaussianBlur(diff, (7, 7), 0)
     _, thresh = cv2.threshold(diff, 30, 255, cv2.THRESH_BINARY)
 
@@ -80,70 +128,11 @@ def detect_bobber(
     contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     if dbg.is_enabled():
-        dbg.save(
-            before,
-            f"cal_{drag_label}_before",
-            annotations=[
-                {
-                    "type": "rect",
-                    "pt1": (x1, y1),
-                    "pt2": (x2, y2),
-                    "color": (0, 255, 0),
-                    "thickness": 1,
-                },
-            ],
-        )
-        dbg.save(
-            after,
-            f"cal_{drag_label}_after",
-            annotations=[
-                {
-                    "type": "rect",
-                    "pt1": (x1, y1),
-                    "pt2": (x2, y2),
-                    "color": (0, 255, 0),
-                    "thickness": 1,
-                },
-            ],
-        )
-        diff_vis = cv2.cvtColor(thresh, cv2.COLOR_GRAY2BGR)
-        full_diff = np.zeros_like(before)
-        full_diff[y1:y2, x1:x2] = diff_vis
-        diff_anns: list[dict] = [
-            {
-                "type": "rect",
-                "pt1": (x1, y1),
-                "pt2": (x2, y2),
-                "color": (0, 255, 0),
-                "thickness": 1,
-            },
-        ]
-        for c in contours:
-            area_c = cv2.contourArea(c)
-            m = cv2.moments(c)
-            if m["m00"] > 0:
-                bx = int(m["m10"] / m["m00"]) + x1
-                by = int(m["m01"] / m["m00"]) + y1
-                diff_anns.append(
-                    {"type": "circle", "center": (bx, by), "radius": 8, "color": (0, 255, 255)}
-                )
-                diff_anns.append(
-                    {
-                        "type": "text",
-                        "pos": (bx + 10, by),
-                        "text": f"a={area_c}",
-                        "color": (0, 255, 255),
-                        "thickness": 1,
-                    }
-                )
-        dbg.save(full_diff, f"cal_{drag_label}_diff", annotations=diff_anns)
+        _debug_bobber_frames(before, after, thresh, contours, (x1, y1, x2, y2), drag_label)
 
     if not contours:
         log.warning("detect_bobber: no changed blobs found in pond region")
         return None
-
-    _BOBBER_MIN_AREA = 50
-    _BOBBER_MAX_AREA = 5000
 
     valid = [c for c in contours if _BOBBER_MIN_AREA <= cv2.contourArea(c) <= _BOBBER_MAX_AREA]
     if not valid:
@@ -158,7 +147,6 @@ def detect_bobber(
 
     best = max(valid, key=cv2.contourArea)
     area = cv2.contourArea(best)
-
     M = cv2.moments(best)
     if M["m00"] == 0:
         return None

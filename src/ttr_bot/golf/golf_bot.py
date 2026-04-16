@@ -87,104 +87,16 @@ class GolfBot:
 
         while holes_played < holes_per_round and not self._stop_event.is_set():
             hole_num = holes_played + 1
-            hole_t0 = perf_counter()
-            log.info(
-                "Golf [auto %d/%d] — start hole (round +%.1fs)",
-                hole_num,
-                holes_per_round,
-                perf_counter() - round_t0,
-            )
             self._emit(f"Hole {hole_num}/{holes_per_round}…")
 
-            def _wait_manual(
-                options: list[str],
-                _cb=self.on_need_manual_course,
-            ) -> str | None:
-                if _cb:
-                    return _cb(options)
-                self._emit(
-                    "No course detected — add pytesseract+tesseract, templates, or JSON files."
-                )
-                return None
-
-            # After hole 1+, wait until the turn timer appears *before* opening the scoreboard.
-            # Otherwise OCR still reads the previous hole's course name and we would stall forever
-            # on "same course as last hole" or play the wrong JSON.
-            if holes_played > 0:
-                self._emit("Step: wait for turn (before scoreboard)…")
-                wait_until_ready_to_swing(
-                    self._stop_event.is_set, interval_s=0.5, phase="pre_scoreboard"
-                )
-                if self._stop_event.is_set():
-                    break
-
-            self._emit("Step: detect course via scoreboard…")
-            t0 = perf_counter()
-            stem = wait_for_course_detection(
-                self._stop_event.is_set,
-                scan_interval_s=settings.GOLF_SCAN_INTERVAL_S,
-                max_scoreboard_attempts=3,
-                on_need_manual=_wait_manual,
-            )
-            log.info(
-                "Golf [auto %d/%d] — course detection finished in %.1fs (stem=%s)",
-                hole_num,
-                holes_per_round,
-                perf_counter() - t0,
-                stem or "None",
-            )
-
+            played = self._play_hole(hole_num, holes_per_round, is_first=(holes_played == 0))
             if self._stop_event.is_set():
                 break
-            if not stem:
-                log.warning(
-                    "Golf [auto %d/%d] — no stem; retrying loop (+%.1fs in hole)",
-                    hole_num,
-                    holes_per_round,
-                    perf_counter() - hole_t0,
-                )
+            if not played:
                 continue
-
-            if not action_file_exists(stem):
-                self._emit(f"No action file for: {stem}.json — add it under golf_actions/")
-                time.sleep(2.0)
-                continue
-
-            self._emit("Step: wait for turn (before swing)…")
-            wait_until_ready_to_swing(self._stop_event.is_set, interval_s=0.5, phase="pre_swing")
-            if self._stop_event.is_set():
-                break
-
-            log.info(
-                "Golf [auto %d/%d] — pre-swing delay %.1fs",
-                hole_num,
-                holes_per_round,
-                settings.GOLF_PRE_SWING_DELAY_S,
-            )
-            time.sleep(settings.GOLF_PRE_SWING_DELAY_S)
-
-            path = path_for_stem(stem)
-            self._emit(f"Step: replay JSON — {stem}")
-            t_play = perf_counter()
-            perform_golf_actions(path, self._stop_event)
-            log.info(
-                "Golf [auto %d/%d] — replay finished in %.1fs (file=%s)",
-                hole_num,
-                holes_per_round,
-                perf_counter() - t_play,
-                path,
-            )
-            if self._stop_event.is_set():
-                break
 
             holes_played += 1
             self._emit(f"Hole {holes_played}/{holes_per_round} done.")
-            log.info(
-                "Golf [auto %d/%d] — hole complete in %.1fs total",
-                holes_played,
-                holes_per_round,
-                perf_counter() - hole_t0,
-            )
 
             if holes_played < holes_per_round:
                 self._emit(
@@ -192,13 +104,99 @@ class GolfBot:
                 )
                 time.sleep(settings.GOLF_BETWEEN_HOLES_DELAY_S)
 
-        if self._stop_event.is_set():
-            self._emit("Golf stopped.")
-        else:
-            self._emit("Round complete.")
+        self._emit("Golf stopped." if self._stop_event.is_set() else "Round complete.")
         log.info(
             "Golf [auto] — round finished in %.1fs (holes=%d/%d)",
             perf_counter() - round_t0,
             holes_played,
             holes_per_round,
         )
+
+    def _play_hole(self, hole_num: int, total_holes: int, *, is_first: bool) -> bool:
+        """Detect course, wait for turn, and replay the JSON for one hole.
+
+        Returns True if the hole was played, False to retry detection.
+        """
+        hole_t0 = perf_counter()
+
+        if not is_first:
+            self._emit("Step: wait for turn (before scoreboard)…")
+            wait_until_ready_to_swing(
+                self._stop_event.is_set,
+                interval_s=0.5,
+                phase="pre_scoreboard",
+            )
+            if self._stop_event.is_set():
+                return False
+
+        stem = self._detect_course(hole_num, total_holes)
+        if self._stop_event.is_set():
+            return False
+        if not stem:
+            log.warning(
+                "Golf [auto %d/%d] — no stem; retrying (+%.1fs)",
+                hole_num,
+                total_holes,
+                perf_counter() - hole_t0,
+            )
+            return False
+
+        if not action_file_exists(stem):
+            self._emit(f"No action file for: {stem}.json — add it under golf_actions/")
+            time.sleep(2.0)
+            return False
+
+        self._emit("Step: wait for turn (before swing)…")
+        wait_until_ready_to_swing(self._stop_event.is_set, interval_s=0.5, phase="pre_swing")
+        if self._stop_event.is_set():
+            return False
+
+        time.sleep(settings.GOLF_PRE_SWING_DELAY_S)
+
+        path = path_for_stem(stem)
+        self._emit(f"Step: replay JSON — {stem}")
+        t_play = perf_counter()
+        perform_golf_actions(path, self._stop_event)
+        log.info(
+            "Golf [auto %d/%d] — replay finished in %.1fs (file=%s)",
+            hole_num,
+            total_holes,
+            perf_counter() - t_play,
+            path,
+        )
+        log.info(
+            "Golf [auto %d/%d] — hole complete in %.1fs total",
+            hole_num,
+            total_holes,
+            perf_counter() - hole_t0,
+        )
+        return not self._stop_event.is_set()
+
+    def _detect_course(self, hole_num: int, total_holes: int) -> str | None:
+        """Open the scoreboard and OCR the course name."""
+
+        def _wait_manual(
+            options: list[str],
+            _cb: Callable[[list[str]], str | None] | None = self.on_need_manual_course,
+        ) -> str | None:
+            if _cb:
+                return _cb(options)
+            self._emit("No course detected — add pytesseract+tesseract, templates, or JSON files.")
+            return None
+
+        self._emit("Step: detect course via scoreboard…")
+        t0 = perf_counter()
+        stem = wait_for_course_detection(
+            self._stop_event.is_set,
+            scan_interval_s=settings.GOLF_SCAN_INTERVAL_S,
+            max_scoreboard_attempts=3,
+            on_need_manual=_wait_manual,
+        )
+        log.info(
+            "Golf [auto %d/%d] — course detection finished in %.1fs (stem=%s)",
+            hole_num,
+            total_holes,
+            perf_counter() - t0,
+            stem or "None",
+        )
+        return stem

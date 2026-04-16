@@ -32,7 +32,7 @@ target-version = "py313"
 line-length = 99
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF", "C901", "PLR0912", "PLR0915"]
 ignore = ["RUF001", "RUF002", "RUF003"]
 
 [tool.ty.environment]

@@ -150,20 +150,12 @@ class GardenSweeper:
             self._debug_save(debug_annotate(frame, direction, magnitude), f"steer_{direction}")
 
             if direction == "none":
-                idle_count += 1
-                if idle_count >= 10:
-                    self._recover_from_stuck()
-                    idle_count = 0
-                    continue
-                if idle_count <= 4:
-                    self._status(f"No flowers — walking forward to search ({idle_count})")
-                    outcome = self._walk_and_scan(["up"], settings.SWEEP_WALK_BURST_S)
-                    if outcome == "bed_found":
-                        self._interact_at_bed(flower_name, bean_sequence, result)
-                        self._walk_away()
-                else:
-                    self._status("No flowers — rotating to scan")
-                    self._key_burst(["right"], settings.SWEEP_SCAN_ROTATE_S)
+                idle_count = self._handle_no_flowers(
+                    idle_count,
+                    flower_name,
+                    bean_sequence,
+                    result,
+                )
                 continue
 
             idle_count = 0
@@ -178,6 +170,29 @@ class GardenSweeper:
             if outcome == "bed_found":
                 self._interact_at_bed(flower_name, bean_sequence, result)
                 self._walk_away()
+
+    def _handle_no_flowers(
+        self,
+        idle_count: int,
+        flower_name: str,
+        bean_sequence: str,
+        result: SweepResult,
+    ) -> int:
+        """React when no flowers are visible. Returns the updated idle counter."""
+        idle_count += 1
+        if idle_count >= 10:
+            self._recover_from_stuck()
+            return 0
+        if idle_count <= 4:
+            self._status(f"No flowers — walking forward to search ({idle_count})")
+            outcome = self._walk_and_scan(["up"], settings.SWEEP_WALK_BURST_S)
+            if outcome == "bed_found":
+                self._interact_at_bed(flower_name, bean_sequence, result)
+                self._walk_away()
+        else:
+            self._status("No flowers — rotating to scan")
+            self._key_burst(["right"], settings.SWEEP_SCAN_ROTATE_S)
+        return idle_count
 
     # ------------------------------------------------------------------
     # Walk-and-scan
