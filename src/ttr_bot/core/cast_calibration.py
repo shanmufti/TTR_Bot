@@ -269,10 +269,11 @@ class CastCalibration:
             self._matrix = np.array(data["matrix"])
             self._samples = [CalibrationSample(**s) for s in data.get("samples", [])]
             log.info("Cast calibration loaded: matrix=\n%s", self._matrix)
-            return True
         except Exception:
             log.exception("Failed to load cast calibration")
             return False
+        else:
+            return True
 
     def load_default(self) -> None:
         """Apply a reasonable default transform.

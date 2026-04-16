@@ -24,11 +24,7 @@ def list_action_stems() -> list[str]:
     if not d or not os.path.isdir(d):
         return []
 
-    names = []
-    for name in sorted(os.listdir(d)):
-        if name.endswith(".json"):
-            names.append(os.path.splitext(name)[0])
-    return names
+    return [os.path.splitext(name)[0] for name in sorted(os.listdir(d)) if name.endswith(".json")]
 
 
 def action_file_exists(stem: str) -> bool:

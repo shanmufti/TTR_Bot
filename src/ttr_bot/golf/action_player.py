@@ -83,7 +83,7 @@ def load_actions(path: str) -> list[GolfActionCommand]:
     with open(path, encoding="utf-8") as f:
         raw = json.load(f)
     if not isinstance(raw, list):
-        raise ValueError("Golf JSON must be a list of actions")
+        raise TypeError("Golf JSON must be a list of actions")
     return [GolfActionCommand.from_dict(x) for x in raw]
 
 

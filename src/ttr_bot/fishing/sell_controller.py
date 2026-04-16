@@ -8,6 +8,7 @@ import json
 import os
 
 from ttr_bot.config.settings import SELL_PATHS_DIR
+from ttr_bot.utils.logger import log
 
 
 def list_sell_paths() -> list[dict]:
@@ -24,6 +25,7 @@ def list_sell_paths() -> list[dict]:
                 data = json.load(f)
             paths.append({"name": data.get("name", fname), "filename": fname, "path": full})
         except Exception:
+            log.debug("Skipping unreadable sell path: %s", fname)
             continue
     return paths
 

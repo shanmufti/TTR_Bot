@@ -22,7 +22,7 @@ def _detect_retina_scale() -> int:
         if main is not None:
             return int(main.backingScaleFactor())
     except Exception:
-        pass
+        log.debug("Could not detect Retina scale, using default")
     return settings.RETINA_SCALE
 
 

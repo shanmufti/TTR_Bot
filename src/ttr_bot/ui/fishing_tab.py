@@ -294,9 +294,8 @@ class FishingTab:
                 self._overlay = OverlayWindow()
             else:
                 self._overlay.show()
-        else:
-            if self._overlay is not None:
-                self._overlay.hide()
+        elif self._overlay is not None:
+            self._overlay.hide()
 
     # ------------------------------------------------------------------
     # Thread-safe callbacks

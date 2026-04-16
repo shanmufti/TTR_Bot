@@ -20,7 +20,7 @@ def main() -> None:
     args = parser.parse_args()
 
     recorder = DemoRecorder()
-    recorder.on_status = lambda msg: print(msg)
+    recorder.on_status = print
 
     demo_dir = recorder.start()
     print(f"\nRecording to: {demo_dir}")

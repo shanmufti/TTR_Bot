@@ -50,6 +50,37 @@ def _is_surrounded_by_water(water_mask: np.ndarray, cx: int, cy: int) -> bool:
     return water_count / len(xs) >= settings.SHADOW_WATER_MIN_RATIO
 
 
+def _check_blob_geometry(
+    stats: np.ndarray,
+    label_id: int,
+    rejected: dict[str, int],
+) -> tuple[int, int, int, float, float] | None:
+    """Validate area, size, aspect, and fill. Returns (area, bw, bh, aspect, fill) or None."""
+    area = stats[label_id, cv2.CC_STAT_AREA]
+    if area < settings.SHADOW_MIN_AREA or area > settings.SHADOW_MAX_AREA:
+        rejected["area"] += 1
+        return None
+
+    bw = stats[label_id, cv2.CC_STAT_WIDTH]
+    bh = stats[label_id, cv2.CC_STAT_HEIGHT]
+    too_small = bw < settings.SHADOW_MIN_SIZE or bh < settings.SHADOW_MIN_SIZE
+    too_large = bw > settings.SHADOW_MAX_DIM or bh > settings.SHADOW_MAX_DIM
+    if too_small or too_large or bw == 0 or bh == 0:
+        rejected["size"] += 1
+        return None
+    aspect = bw / bh
+    if aspect < settings.SHADOW_MIN_ASPECT or aspect > settings.SHADOW_MAX_ASPECT:
+        rejected["aspect"] += 1
+        return None
+
+    fill = area / max(1, bw * bh)
+    if fill < settings.SHADOW_MIN_FILL:
+        rejected["fill"] += 1
+        return None
+
+    return area, bw, bh, aspect, fill
+
+
 def _filter_blob(
     label_id: int,
     stats: np.ndarray,
@@ -63,31 +94,10 @@ def _filter_blob(
 ) -> FishCandidate | None:
     from ttr_bot.vision.bubble_detector import has_bubbles_above
 
-    area = stats[label_id, cv2.CC_STAT_AREA]
-    if area < settings.SHADOW_MIN_AREA or area > settings.SHADOW_MAX_AREA:
-        rejected["area"] += 1
+    geom = _check_blob_geometry(stats, label_id, rejected)
+    if geom is None:
         return None
-
-    bw = stats[label_id, cv2.CC_STAT_WIDTH]
-    bh = stats[label_id, cv2.CC_STAT_HEIGHT]
-    if bw < settings.SHADOW_MIN_SIZE or bh < settings.SHADOW_MIN_SIZE:
-        rejected["size"] += 1
-        return None
-    if bw > settings.SHADOW_MAX_DIM or bh > settings.SHADOW_MAX_DIM:
-        rejected["size"] += 1
-        return None
-
-    if bw == 0 or bh == 0:
-        return None
-    aspect = bw / bh
-    if aspect < settings.SHADOW_MIN_ASPECT or aspect > settings.SHADOW_MAX_ASPECT:
-        rejected["aspect"] += 1
-        return None
-
-    fill = area / max(1, bw * bh)
-    if fill < settings.SHADOW_MIN_FILL:
-        rejected["fill"] += 1
-        return None
+    area, bw, bh, aspect, fill = geom
 
     blob_cx = int(centroids[label_id][0])
     blob_cy = int(centroids[label_id][1])

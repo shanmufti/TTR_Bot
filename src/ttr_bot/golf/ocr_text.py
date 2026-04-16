@@ -19,7 +19,8 @@ def read_text_from_bgr(crop_bgr: np.ndarray) -> str:
         rgb = crop_bgr[:, :, ::-1]
         pil = Image.fromarray(rgb)
         text = pytesseract.image_to_string(pil, config="--psm 6")
-        return text or ""
     except Exception as exc:
         log.debug("Golf OCR skipped: %s", exc)
         return ""
+    else:
+        return text or ""

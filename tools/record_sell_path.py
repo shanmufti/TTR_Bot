@@ -130,6 +130,7 @@ def _wait_for_f7():
         if key == keyboard.Key.f7:
             _phase_start.set()
             return False  # stop listener
+        return None
 
     with keyboard.Listener(on_press=_on_press):
         _phase_start.wait()

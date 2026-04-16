@@ -86,7 +86,7 @@ def find_ttr_window() -> WindowInfo | None:
     for win in window_list:
         owner = win.get(Quartz.kCGWindowOwnerName, "")
         name = win.get(Quartz.kCGWindowName, "")
-        if owner != GAME_WINDOW_TITLE and name != GAME_WINDOW_TITLE:
+        if GAME_WINDOW_TITLE not in (owner, name):
             continue
 
         wid = int(win[Quartz.kCGWindowNumber])

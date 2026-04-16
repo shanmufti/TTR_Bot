@@ -50,7 +50,8 @@ class CastParams:
                 params.aim_base_right or params.aim_base,
                 params.aim_offset or 0.0,
             )
-            return params
         except Exception:
             log.exception("Failed to load cast params")
             return None
+        else:
+            return params

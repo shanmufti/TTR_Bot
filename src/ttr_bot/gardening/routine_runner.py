@@ -112,7 +112,7 @@ class RoutineRunner:
                 return
 
             sweeper = GardenSweeper(self._bot, self._stop_event)
-            sweeper.on_status = lambda msg: self._notify_status(msg)
+            sweeper.on_status = self._notify_status
 
             result = sweeper.sweep(
                 flower,
@@ -143,7 +143,7 @@ class RoutineRunner:
                 return
 
             watcher = GardenWatcher(self._bot, self._stop_event)
-            watcher.on_status = lambda msg: self._notify_status(msg)
+            watcher.on_status = self._notify_status
 
             result = watcher.watch(flower, beans)
 

@@ -35,6 +35,6 @@ def pond_scene_frame() -> np.ndarray:
     frame[:120, :] = (230, 200, 180)  # BGR
     # Water (120-360) - teal in water HSV range
     frame[120:360, :] = (200, 160, 60)  # BGR
-    # Ground (360-600) - brown
+    # Ground (360-600) - brown  # noqa: ERA001
     frame[360:, :] = (40, 60, 100)  # BGR
     return frame

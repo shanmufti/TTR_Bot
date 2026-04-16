@@ -32,8 +32,24 @@ target-version = "py313"
 line-length = 99
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF", "C901", "PLR0912", "PLR0915"]
-ignore = ["RUF001", "RUF002", "RUF003"]
+select = [
+    "E", "F", "W", "I", "UP", "B", "SIM", "RUF",     # existing
+    "N", "A", "C4", "S", "RET", "PIE", "PERF",         # new: naming, security, returns, perf
+    "FURB", "TRY", "ERA", "T20",                        # new: modernize, exceptions, print
+    "PLE", "PLW", "PLR",                                # pylint: errors, warnings, refactor
+]
+ignore = [
+    "RUF001", "RUF002", "RUF003",   # ambiguous unicode (existing)
+    "PLR2004",                        # magic-value-comparison — domain constants are readable in context
+    "PLR0913",                        # too-many-arguments — some functions genuinely need many params
+    "PLW0603",                        # global-statement — intentional singleton pattern
+    "N806",                           # non-lowercase-variable-in-function — math convention (M, A)
+    "TRY003",                         # raise-vanilla-args — descriptive error messages are fine
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tools/*" = ["T201"]          # print is expected in CLI tools
+"tests/*" = ["T201", "S101"]  # print + assert allowed in tests
 
 [tool.ty.environment]
 python-version = "3.13"
