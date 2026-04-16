@@ -113,7 +113,7 @@ _aim_offset: float = 0.0
 def reload_cast_params() -> None:
     """Load fitted cast params from disk, falling back to defaults."""
     global _power_base, _aim_base_left, _aim_base_right, _aim_offset
-    from ttr_bot.fishing.cast_recorder import CastParams
+    from ttr_bot.core.cast_params import CastParams
 
     params = CastParams.load()
     if params is not None:

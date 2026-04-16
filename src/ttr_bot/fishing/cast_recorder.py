@@ -7,18 +7,17 @@ recording, fit_cast_params() derives power/aim curve constants.
 
 from __future__ import annotations
 
-import json
 import math
-import os
 import threading
 import time
 from collections.abc import Callable
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 
 import numpy as np
 import pyautogui
 
 from ttr_bot.core.cast_calibration import detect_bobber
+from ttr_bot.core.cast_params import CastParams
 from ttr_bot.core.screen_capture import capture_window
 from ttr_bot.core.window_manager import WindowInfo, find_ttr_window
 from ttr_bot.utils import debug_frames as dbg
@@ -27,10 +26,6 @@ from ttr_bot.vision.color_matcher import average_water_brightness, build_water_m
 from ttr_bot.vision.fish_detector import FishCandidate, detect_fish_shadows
 from ttr_bot.vision.pond_detector import PondArea, detect_pond
 from ttr_bot.vision.template_matcher import find_template
-
-_PARAMS_FILE = os.path.join(
-    os.path.dirname(os.path.dirname(__file__)), "config", "cast_params.json"
-)
 
 _RETINA_SCALE = 2
 
@@ -45,45 +40,6 @@ class CastSample:
     bobber_y: int
     drag_dx: float
     drag_dy: float
-
-
-@dataclass
-class CastParams:
-    power_base: float = 6.8
-    aim_base: float = 3.0
-    aim_base_right: float | None = None
-    aim_offset: float | None = None
-
-    def save(self) -> None:
-        os.makedirs(os.path.dirname(_PARAMS_FILE), exist_ok=True)
-        with open(_PARAMS_FILE, "w") as f:
-            json.dump(asdict(self), f, indent=2)
-        log.info("Cast params saved to %s", _PARAMS_FILE)
-
-    @staticmethod
-    def load() -> CastParams | None:
-        if not os.path.isfile(_PARAMS_FILE):
-            return None
-        try:
-            with open(_PARAMS_FILE) as f:
-                data = json.load(f)
-            params = CastParams(
-                power_base=data.get("power_base", 6.8),
-                aim_base=data.get("aim_base", 3.0),
-                aim_base_right=data.get("aim_base_right"),
-                aim_offset=data.get("aim_offset"),
-            )
-            log.info(
-                "Cast params loaded: power=%.2f aim_left=%.2f aim_right=%.2f offset=%.1f",
-                params.power_base,
-                params.aim_base,
-                params.aim_base_right or params.aim_base,
-                params.aim_offset or 0.0,
-            )
-            return params
-        except Exception:
-            log.exception("Failed to load cast params")
-            return None
 
 
 def _to_screen(win: WindowInfo, wx: int, wy: int) -> tuple[int, int]:
@@ -125,8 +81,6 @@ class CastRecorder:
     def _loop(self) -> None:
         from ttr_bot.core.window_manager import set_calibrated_bounds
         from ttr_bot.vision.template_matcher import calibrate_scale, clear_cache
-
-        dbg._reset_session()
 
         win = find_ttr_window()
         if win is None:
