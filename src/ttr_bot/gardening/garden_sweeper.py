@@ -120,7 +120,10 @@ class GardenSweeper:
     # ------------------------------------------------------------------
 
     def _make_bed_ctx(
-        self, flower_name: str, bean_sequence: str, result: SweepResult,
+        self,
+        flower_name: str,
+        bean_sequence: str,
+        result: SweepResult,
     ) -> BedActionContext:
         return BedActionContext(
             flower_name=flower_name,
@@ -194,7 +197,10 @@ class GardenSweeper:
 
             self._status(f"Walking toward flowers (visited {result.beds_visited}/{target_beds})")
             outcome = walk_and_scan(
-                ["up"], settings.SWEEP_WALK_BURST_S, self._stop_event, scan_cb,
+                ["up"],
+                settings.SWEEP_WALK_BURST_S,
+                self._stop_event,
+                scan_cb,
             )
             if outcome == "bed_found":
                 interact_at_bed(bed_ctx)
@@ -214,7 +220,10 @@ class GardenSweeper:
         if idle_count <= settings.SWEEP_WALK_BEFORE_ROTATE:
             self._status(f"No flowers — walking forward to search ({idle_count})")
             outcome = walk_and_scan(
-                ["up"], settings.SWEEP_WALK_BURST_S, self._stop_event, scan_cb,
+                ["up"],
+                settings.SWEEP_WALK_BURST_S,
+                self._stop_event,
+                scan_cb,
             )
             if outcome == "bed_found":
                 interact_at_bed(bed_ctx)

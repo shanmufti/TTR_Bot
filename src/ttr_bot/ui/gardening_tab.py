@@ -45,7 +45,7 @@ class GardeningTab:
 
     def _build_ui(self) -> None:
         parent = self._parent
-        pad = {"padx": 8, "pady": 4}
+        _pad_x, _pad_y = 8, 4
 
         # ---- Watch section ----
         watch_frame = tk.LabelFrame(
@@ -57,7 +57,7 @@ class GardeningTab:
             bd=1,
             relief="groove",
         )
-        watch_frame.pack(fill="x", **pad)
+        watch_frame.pack(fill="x", padx=_pad_x, pady=_pad_y)
 
         # Flower selection row
         flower_row = tk.Frame(watch_frame, bg=BG)

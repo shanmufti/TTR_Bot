@@ -31,9 +31,7 @@ def execute_plant(
         return False
     if not select_beans(bean_sequence, win, stop_event, status_fn=status_fn):
         return False
-    if not confirm_plant(
-        flower_name, stop_event, status_fn=status_fn, water_fn=water_fn
-    ):
+    if not confirm_plant(flower_name, stop_event, status_fn=status_fn, water_fn=water_fn):
         return False
 
     log.info("[Timing] execute_plant total=%.0fms", (time.monotonic() - plant_t0) * 1000)

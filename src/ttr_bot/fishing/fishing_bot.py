@@ -138,15 +138,18 @@ class FishingBot(BotBase):
 
         bite_detector.dismiss_blocking_dialog(win)
 
-        btn, frame = bite_detector.find_cast_button(win, self._stop_event)
+        btn, btn_frame = bite_detector.find_cast_button(win, self._stop_event)
         if btn is None:
             self.stats.skipped += 1
             self._notify_stats()
             return CastOutcome.SKIPPED
 
-        fresh = capture_window(win)
-        if fresh is not None:
-            frame = fresh
+        frame = capture_window(win) or btn_frame
+        if frame is None:
+            self.stats.skipped += 1
+            self._notify_stats()
+            return CastOutcome.SKIPPED
+
         candidates = detect_fish_shadows(frame, pond, avg_water_bright)
         shadow = find_best_fish(
             frame,
@@ -174,9 +177,7 @@ class FishingBot(BotBase):
 
         time.sleep(settings.POST_CAST_DELAY_S)
 
-        bite_result = bite_detector.wait_for_bite(
-            win, self.config.bite_timeout, self._stop_event
-        )
+        bite_result = bite_detector.wait_for_bite(win, self.config.bite_timeout, self._stop_event)
 
         if dbg.is_enabled():
             fishing_debug.save_bite_debug(win, bite_result.value, self.stats.casts)

@@ -164,9 +164,7 @@ class GardenBot(BotBase):
         if win is not None:
             frame = capture_window(win)
             if frame is not None and is_element_visible(frame, "pick_flower_button"):
-                self._status(
-                    f"Existing flower detected — picking before planting {flower_name}"
-                )
+                self._status(f"Existing flower detected — picking before planting {flower_name}")
                 if not find_and_click("pick_flower_button", stop_event=self._stop_event):
                     self._status("Pick button not found")
                     return False

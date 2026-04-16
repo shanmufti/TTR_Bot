@@ -4,6 +4,8 @@ Compares before-cast and after-cast frames to locate the bobber
 landing position inside the pond region.
 """
 
+from collections.abc import Sequence
+
 import cv2
 import numpy as np
 
@@ -15,7 +17,7 @@ _BOBBER_MAX_AREA = 5000
 
 def _debug_bobber_frames(
     frames: tuple[np.ndarray, np.ndarray, np.ndarray],
-    contours: list,
+    contours: Sequence,
     roi: tuple[int, int, int, int],
     drag_label: str,
 ) -> None:

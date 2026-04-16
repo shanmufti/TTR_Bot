@@ -45,8 +45,6 @@ class FishingTab:
 
     def _build_ui(self) -> None:
         parent = self._parent
-        pad = {"padx": 8, "pady": 4}
-
         settings_frame = tk.LabelFrame(
             parent,
             text="Settings",
@@ -56,7 +54,7 @@ class FishingTab:
             bd=1,
             relief="groove",
         )
-        settings_frame.pack(fill="x", **pad)
+        settings_frame.pack(fill="x", padx=8, pady=4)
 
         row = 0
 

@@ -190,7 +190,7 @@ class GardenWatcher:
 
     def _execute(
         self,
-        state: str,
+        state: BedState,
         bed_num: int,
         flower_name: str,
         bean_sequence: str,
@@ -213,14 +213,14 @@ class GardenWatcher:
             if self._bot.plant_flower_no_pick(flower_name, bean_sequence):
                 result.beds_planted += 1
 
-    def _debug_save(self, frame, state: str, bed_num: int) -> None:
+    def _debug_save(self, frame, state: BedState, bed_num: int) -> None:
         t0 = time.monotonic()
         self._debug_seq += 1
-        path = os.path.join(_DEBUG_DIR, f"{self._debug_seq:03d}_bed{bed_num}_{state}.png")
+        path = os.path.join(_DEBUG_DIR, f"{self._debug_seq:03d}_bed{bed_num}_{state.value}.png")
         debug_frame = frame.copy()
         cv2.putText(
             debug_frame,
-            f"BED #{bed_num}: {state}",
+            f"BED #{bed_num}: {state.value}",
             (20, 40),
             cv2.FONT_HERSHEY_SIMPLEX,
             1.2,

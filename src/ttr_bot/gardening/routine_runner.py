@@ -108,7 +108,7 @@ class RoutineRunner:
 
         try:
             flower, beans = self._validate_flower()
-            if flower is None:
+            if flower is None or beans is None:
                 return
 
             sweeper = GardenSweeper(self._bot, self._stop_event)
@@ -139,7 +139,7 @@ class RoutineRunner:
 
         try:
             flower, beans = self._validate_flower()
-            if flower is None:
+            if flower is None or beans is None:
                 return
 
             watcher = GardenWatcher(self._bot, self._stop_event)

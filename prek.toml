@@ -1,0 +1,36 @@
+# prek — fast git hooks in Rust.
+# Install:  prek install
+# Test:     prek run --all-files
+
+[[repos]]
+repo = "local"
+
+[[repos.hooks]]
+id = "ruff-lint"
+name = "ruff lint"
+entry = ".venv/bin/python3 -m ruff check --no-fix --force-exclude"
+language = "system"
+types_or = ["python", "pyi"]
+
+[[repos.hooks]]
+id = "ruff-format"
+name = "ruff format"
+entry = ".venv/bin/python3 -m ruff format --check --force-exclude"
+language = "system"
+types_or = ["python", "pyi"]
+
+[[repos.hooks]]
+id = "ty"
+name = "ty type check"
+entry = ".venv/bin/python3 -m ty check src/"
+language = "system"
+pass_filenames = false
+types = ["python"]
+
+[[repos.hooks]]
+id = "pytest"
+name = "pytest"
+entry = ".venv/bin/python3 -m pytest tests/ -x -q --no-header"
+language = "system"
+pass_filenames = false
+stages = ["pre-push"]

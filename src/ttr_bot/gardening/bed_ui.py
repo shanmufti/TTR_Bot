@@ -18,6 +18,7 @@ class BedState(enum.Enum):
     PLANT = "plant"
     UNKNOWN = "unknown"
 
+
 # Order matters for debugging labels; detection tries each until one matches.
 BED_BUTTON_NAMES = (
     "remove_button",

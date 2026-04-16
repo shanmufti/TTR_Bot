@@ -2,6 +2,7 @@
 
 import threading
 import time
+from collections.abc import Callable
 
 from ttr_bot.config import settings
 from ttr_bot.core import input_controller as inp
@@ -52,8 +53,7 @@ def find_and_click(
             inp.click(match.x, match.y, window=win)
             total_ms = (time.monotonic() - t_start) * 1000
             log.info(
-                "Clicked %s at (%d,%d) conf=%.2f  "
-                "(polls=%d cap=%.0fms match=%.0fms total=%.0fms)",
+                "Clicked %s at (%d,%d) conf=%.2f  (polls=%d cap=%.0fms match=%.0fms total=%.0fms)",
                 template_name,
                 match.x,
                 match.y,
@@ -72,7 +72,7 @@ def find_and_click(
 
 
 def ensure_calibrated(
-    status_fn: "Callable[[str], None] | None" = None,  # noqa: F821
+    status_fn: Callable[[str], None] | None = None,
 ) -> bool:
     """Verify scale calibration is set, running it if needed."""
     from ttr_bot.core.calibration_service import CalibrationService

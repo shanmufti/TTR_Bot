@@ -35,7 +35,7 @@ class GolfingTab:
         self._wire_callbacks()
 
     def _build_ui(self) -> None:
-        pad = {"padx": 8, "pady": 4}
+        _pad_x, _pad_y = 8, 4
 
         info = tk.Label(
             self._parent,
@@ -57,7 +57,7 @@ class GolfingTab:
             bd=1,
             relief="groove",
         )
-        custom.pack(fill="x", **pad)
+        custom.pack(fill="x", padx=_pad_x, pady=_pad_y)
 
         row = tk.Frame(custom, bg=BG)
         row.pack(fill="x", padx=8, pady=4)
@@ -113,7 +113,7 @@ class GolfingTab:
             bd=1,
             relief="groove",
         )
-        auto.pack(fill="x", **pad)
+        auto.pack(fill="x", padx=_pad_x, pady=_pad_y)
 
         ar = tk.Frame(auto, bg=BG)
         ar.pack(fill="x", padx=8, pady=6)

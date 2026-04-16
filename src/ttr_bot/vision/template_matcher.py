@@ -103,9 +103,7 @@ class TemplateMatcher:
         """Public wrapper around :meth:`_load_template`."""
         return self._load_template(name)
 
-    def set_calibrated_scale(
-        self, scale: float | None, downsample_factor: int = 1
-    ) -> None:
+    def set_calibrated_scale(self, scale: float | None, downsample_factor: int = 1) -> None:
         """Apply a calibrated *scale* and reset caches."""
         self._global_scale = scale
         self._downsample_factor = downsample_factor
