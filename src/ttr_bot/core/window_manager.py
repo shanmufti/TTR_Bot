@@ -23,11 +23,24 @@ class WindowInfo(NamedTuple):
 _calibrated_bounds: dict | None = None
 
 
-def set_calibrated_bounds(x: int, y: int, width: int, height: int) -> None:
-    """Lock the window bounds to a calibrated position/size."""
+def set_calibrated_bounds(
+    x: int, y: int, width: int, height: int,
+    window_id: int | None = None,
+    pid: int | None = None,
+) -> None:
+    """Lock the window bounds (and optionally ID/PID) to a calibrated snapshot.
+
+    When *window_id* is set, subsequent ``find_ttr_window`` calls will prefer
+    the window with that ID, avoiding confusion when multiple game windows are
+    open.
+    """
     global _calibrated_bounds
-    _calibrated_bounds = {"x": x, "y": y, "width": width, "height": height}
-    log.info("Window bounds locked: %dx%d at (%d,%d)", width, height, x, y)
+    _calibrated_bounds = {
+        "x": x, "y": y, "width": width, "height": height,
+        "window_id": window_id, "pid": pid,
+    }
+    log.info("Window bounds locked: %dx%d at (%d,%d)  wid=%s pid=%s",
+             width, height, x, y, window_id, pid)
 
 
 def clear_calibrated_bounds() -> None:
@@ -39,9 +52,8 @@ def clear_calibrated_bounds() -> None:
 def find_ttr_window() -> WindowInfo | None:
     """Find the Toontown Rewritten window via CGWindowListCopyWindowInfo.
 
-    If calibrated bounds are set, the position/size from calibration
-    is used instead of the live window bounds. The window_id and pid
-    are still detected live.
+    When calibrated bounds include a *window_id*, returns that specific window
+    so multiple open game windows don't cause the bot to flip between them.
     """
     window_list = Quartz.CGWindowListCopyWindowInfo(
         Quartz.kCGWindowListOptionOnScreenOnly | Quartz.kCGWindowListExcludeDesktopElements,
@@ -50,29 +62,43 @@ def find_ttr_window() -> WindowInfo | None:
     if window_list is None:
         return None
 
+    locked_wid = (_calibrated_bounds or {}).get("window_id")
+
+    fallback = None
     for win in window_list:
         owner = win.get(Quartz.kCGWindowOwnerName, "")
         name = win.get(Quartz.kCGWindowName, "")
-        if owner == GAME_WINDOW_TITLE or name == GAME_WINDOW_TITLE:
-            bounds = win.get(Quartz.kCGWindowBounds, {})
-            if _calibrated_bounds:
-                return WindowInfo(
-                    window_id=int(win[Quartz.kCGWindowNumber]),
-                    pid=int(win[Quartz.kCGWindowOwnerPID]),
-                    x=_calibrated_bounds["x"],
-                    y=_calibrated_bounds["y"],
-                    width=_calibrated_bounds["width"],
-                    height=_calibrated_bounds["height"],
-                )
-            return WindowInfo(
-                window_id=int(win[Quartz.kCGWindowNumber]),
-                pid=int(win[Quartz.kCGWindowOwnerPID]),
+        if owner != GAME_WINDOW_TITLE and name != GAME_WINDOW_TITLE:
+            continue
+
+        wid = int(win[Quartz.kCGWindowNumber])
+        pid = int(win[Quartz.kCGWindowOwnerPID])
+        bounds = win.get(Quartz.kCGWindowBounds, {})
+
+        if _calibrated_bounds:
+            info = WindowInfo(
+                window_id=wid, pid=pid,
+                x=_calibrated_bounds["x"],
+                y=_calibrated_bounds["y"],
+                width=_calibrated_bounds["width"],
+                height=_calibrated_bounds["height"],
+            )
+        else:
+            info = WindowInfo(
+                window_id=wid, pid=pid,
                 x=int(bounds.get("X", 0)),
                 y=int(bounds.get("Y", 0)),
                 width=int(bounds.get("Width", 0)),
                 height=int(bounds.get("Height", 0)),
             )
-    return None
+
+        if locked_wid is not None and wid == locked_wid:
+            return info
+
+        if fallback is None:
+            fallback = info
+
+    return fallback
 
 
 def is_window_available() -> bool:

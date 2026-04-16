@@ -1,7 +1,7 @@
 """Fish shadow detection via blob analysis.
 
-Ported from FishShadowAnalyzer.cs in the reference C# bot,
-rewritten to use cv2.connectedComponents for performance on Retina displays.
+Detects dark oval blobs in the pond water, scores them, and picks the best
+target to cast at.
 """
 
 from __future__ import annotations
@@ -13,21 +13,22 @@ import cv2
 import numpy as np
 
 from ttr_bot.config import settings
-from ttr_bot.vision.color_matcher import build_water_mask, build_relative_shadow_mask
+from ttr_bot.vision.color_matcher import build_water_mask
 from ttr_bot.vision.pond_detector import PondArea
 from ttr_bot.utils.logger import log
 
 
 class FishCandidate(NamedTuple):
-    cx: int           # center x (window-relative)
-    cy: int           # center y (window-relative)
-    size: int         # blob pixel count
-    score: float      # confidence 0-1
-    has_bubbles: bool  # bubble confirmation
+    cx: int
+    cy: int
+    size: int
+    score: float
+    has_bubbles: bool
 
 
-SHADOW_MIN_AREA = 100
-SHADOW_MAX_AREA = 8000
+SHADOW_MIN_AREA = 50
+SHADOW_MAX_AREA = 15000
+_SHADOW_MAX_DIM = 200
 
 _RING_OFFSETS = np.array(
     [
@@ -39,10 +40,7 @@ _RING_OFFSETS = np.array(
 )
 
 
-def _is_surrounded_by_water(
-    water_mask: np.ndarray, cx: int, cy: int,
-) -> bool:
-    """Check if a blob center is surrounded by water using pre-built water_mask."""
+def _is_surrounded_by_water(water_mask: np.ndarray, cx: int, cy: int) -> bool:
     h, w = water_mask.shape[:2]
     coords = _RING_OFFSETS + np.array([cx, cy], dtype=np.int32)
     valid = (
@@ -68,7 +66,6 @@ def _filter_blob(
     avg_water_bright: int,
     rejected: dict[str, int],
 ) -> FishCandidate | None:
-    """Evaluate a single connected-component blob; return a candidate or None."""
     from ttr_bot.vision.bubble_detector import has_bubbles_above
 
     area = stats[label_id, cv2.CC_STAT_AREA]
@@ -79,6 +76,9 @@ def _filter_blob(
     bw = stats[label_id, cv2.CC_STAT_WIDTH]
     bh = stats[label_id, cv2.CC_STAT_HEIGHT]
     if bw < settings.SHADOW_MIN_SIZE or bh < settings.SHADOW_MIN_SIZE:
+        rejected["size"] += 1
+        return None
+    if bw > _SHADOW_MAX_DIM or bh > _SHADOW_MAX_DIM:
         rejected["size"] += 1
         return None
 
@@ -117,34 +117,33 @@ def detect_fish_shadows(
     pond: PondArea,
     avg_water_bright: int = 100,
 ) -> list[FishCandidate]:
-    """Scan the pond region for fish shadow blobs.
-
-    Uses cv2.connectedComponentsWithStats for O(n) clustering instead of BFS.
-    Shadows are constrained to only appear within the water mask.
-
-    *avg_water_bright* is passed through to bubble detection — compute it once
-    at session start via ``color_matcher.average_water_brightness``.
-
-    Returns a list of FishCandidate sorted by size (largest first).
-    """
     if pond.empty:
         return []
 
-    margin_x = pond.width * 15 // 100
-    margin_y = pond.height * 20 // 100
+    margin_x = pond.width * 10 // 100
+    margin_top = pond.height * 10 // 100
+    margin_bot = pond.height * 40 // 100
     inner_x = pond.x + margin_x
-    inner_y = pond.y + margin_y
+    inner_y = pond.y + margin_top
     inner_w = pond.width - 2 * margin_x
-    inner_h = pond.height - 2 * margin_y
+    inner_h = pond.height - margin_top - margin_bot
     if inner_w <= 0 or inner_h <= 0:
         return []
 
     crop = frame_bgr[inner_y : inner_y + inner_h, inner_x : inner_x + inner_w]
 
     water_mask = build_water_mask(crop)
-    combined = build_relative_shadow_mask(crop, water_mask)
+    gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
 
-    open_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+    water_pixels = gray[water_mask > 0]
+    if len(water_pixels) == 0:
+        return []
+    water_median = float(np.median(water_pixels))
+
+    shadow_thresh = water_median - 20
+    combined = ((gray < shadow_thresh) & (water_mask > 0)).astype(np.uint8) * 255
+
+    open_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
     combined = cv2.morphologyEx(combined, cv2.MORPH_OPEN, open_kernel)
 
     num_labels, _labels, stats, centroids = cv2.connectedComponentsWithStats(
@@ -172,36 +171,59 @@ def detect_fish_shadows(
 _BUBBLE_SCORE_BOOST = 0.5
 
 
+_NEAR_THRESHOLD = 60
+
+
+def rank_fish(
+    frame_bgr: np.ndarray,
+    pond: PondArea,
+    avg_water_bright: int = 100,
+) -> list[tuple[int, int, float]]:
+    """Return all shadow targets ranked by score: [(x, y, score), ...]."""
+    candidates = detect_fish_shadows(frame_bgr, pond, avg_water_bright)
+    if not candidates:
+        return []
+
+    pond_cx = pond.x + pond.width // 2
+
+    def _score(c: FishCandidate) -> float:
+        rel_y = (c.cy - pond.y) / max(1, pond.height)
+        depth = 1.0 - 2.0 * abs(rel_y - 0.35)
+        centered = 1.0 - abs(c.cx - pond_cx) / max(1, pond.width // 2)
+        bubble = _BUBBLE_SCORE_BOOST if c.has_bubbles else 0.0
+        return c.score + max(0.0, depth) * 0.4 + centered * 0.2 + bubble
+
+    scored = [(c.cx, c.cy, _score(c)) for c in candidates]
+    scored.sort(key=lambda t: t[2], reverse=True)
+    return scored
+
+
 def find_best_fish(
     frame_bgr: np.ndarray,
     pond: PondArea,
     avg_water_bright: int = 100,
+    *,
+    avoid: tuple[int, int] | None = None,
 ) -> tuple[int, int] | None:
-    """Return (x, y) of the best fish shadow, or None if nothing found.
+    """Return (x, y) of the best fish shadow, or None.
 
-    Scoring combines reachability (prefer closer / centred) with a
-    bubble-confirmation bonus so that actively-bubbling shadows beat
-    bare dark spots.
+    If *avoid* is set, skip any candidate within ``_NEAR_THRESHOLD`` px
+    so the bot cycles through different shadows after a miss.
     """
-    candidates = detect_fish_shadows(frame_bgr, pond, avg_water_bright)
-    if not candidates:
+    ranked = rank_fish(frame_bgr, pond, avg_water_bright)
+    if not ranked:
         log.info("find_best_fish: no shadows found")
         return None
 
-    pond_cx = pond.x + pond.width // 2
+    for cx, cy, sc in ranked:
+        if avoid is not None:
+            dist = ((cx - avoid[0]) ** 2 + (cy - avoid[1]) ** 2) ** 0.5
+            if dist < _NEAR_THRESHOLD:
+                log.info("find_best_fish: skipping (%d,%d) too close to avoid target", cx, cy)
+                continue
+        log.info("find_best_fish: picking (%d,%d) score=%.2f", cx, cy, sc)
+        return (cx, cy)
 
-    def _combined_score(c: FishCandidate) -> float:
-        fwd_frac = 1.0 - (c.cy - pond.y) / max(1, pond.height)
-        horiz_frac = abs(c.cx - pond_cx) / max(1, pond.width // 2)
-        reachability = fwd_frac * 0.6 + horiz_frac * 0.4
-        bubble_bonus = _BUBBLE_SCORE_BOOST if c.has_bubbles else 0.0
-        return reachability + bubble_bonus
-
-    candidates.sort(key=_combined_score, reverse=True)
-    best = candidates[0]
-    log.info(
-        "find_best_fish: picking (%d,%d) size=%d score=%.2f bubbles=%s  (pond %dx%d at %d,%d)",
-        best.cx, best.cy, best.size, best.score, best.has_bubbles,
-        pond.width, pond.height, pond.x, pond.y,
-    )
-    return (best.cx, best.cy)
+    best = ranked[0]
+    log.info("find_best_fish: all near avoid — falling back to (%d,%d)", best[0], best[1])
+    return (best[0], best[1])

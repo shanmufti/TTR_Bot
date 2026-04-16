@@ -20,8 +20,9 @@ from ttr_bot.core.screen_capture import capture_window
 from ttr_bot.core.window_manager import find_ttr_window, is_window_available, WindowInfo
 from ttr_bot.vision.color_matcher import build_water_mask, average_water_brightness
 from ttr_bot.vision.pond_detector import detect_pond, PondArea
-from ttr_bot.vision.fish_detector import find_best_fish
-from ttr_bot.vision.template_matcher import find_template_fast
+from ttr_bot.vision.fish_detector import find_best_fish, detect_fish_shadows
+from ttr_bot.vision.template_matcher import find_template
+from ttr_bot.utils import debug_frames as dbg
 from ttr_bot.utils.logger import log
 
 
@@ -50,6 +51,7 @@ class FishingBot:
         self._paused = False
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
+        self._last_miss_target: tuple[int, int] | None = None
 
         self.on_stats_update: Callable[[FishingStats], None] | None = None
         self.on_status_update: Callable[[str], None] | None = None
@@ -68,6 +70,7 @@ class FishingBot:
             return
         self.config = config
         self.stats = FishingStats()
+        self._last_miss_target = None
         self._stop_event.clear()
         self._running = True
         self._paused = False
@@ -76,7 +79,11 @@ class FishingBot:
 
     def stop(self) -> None:
         self._stop_event.set()
+        thread = self._thread
+        if thread is not None:
+            thread.join(timeout=5.0)
         self._running = False
+        self._thread = None
 
     def toggle_pause(self) -> None:
         self._paused = not self._paused
@@ -88,6 +95,7 @@ class FishingBot:
     # ------------------------------------------------------------------
 
     def _run(self) -> None:
+        dbg._reset_session()
         try:
             win = self._preflight()
             if win is None:
@@ -106,16 +114,12 @@ class FishingBot:
             self._finish(f"Error: {exc}")
 
     def _preflight(self) -> WindowInfo | None:
-        """Validate calibration and window before the cast loop starts.
+        """Validate window before the cast loop starts.
 
         Returns the WindowInfo on success, or None after calling _finish.
         """
-        from ttr_bot.core.cast_calibration import cast_calibration
-        if not cast_calibration.is_calibrated:
-            cast_calibration.load()
-        if not cast_calibration.is_calibrated:
-            self._finish("No cast calibration — run Calibrate Cast first")
-            return None
+
+        inp.reload_cast_params()
 
         if not is_window_available():
             self._finish("TTR window not found")
@@ -166,6 +170,52 @@ class FishingBot:
         reason = "User stopped" if self._stop_event.is_set() else "Completed"
         self._finish(reason)
 
+    def _save_shadow_debug(self, frame, btn, pond, candidates, shadow) -> None:
+        """Save an annotated debug frame showing shadow candidates and cast target."""
+        margin_bot = pond.height * 40 // 100
+        margin_top = pond.height * 10 // 100
+        margin_x = pond.width * 10 // 100
+        inner_y1 = pond.y + margin_top
+        inner_y2 = pond.y + pond.height - margin_bot
+        inner_x1 = pond.x + margin_x
+        inner_x2 = pond.x + pond.width - margin_x
+
+        anns: list[dict] = [
+            {"type": "rect",
+             "pt1": (pond.x, pond.y),
+             "pt2": (pond.x + pond.width, pond.y + pond.height),
+             "color": (100, 100, 100), "thickness": 1},
+            {"type": "rect",
+             "pt1": (inner_x1, inner_y1),
+             "pt2": (inner_x2, inner_y2),
+             "color": (0, 200, 200), "thickness": 2},
+        ]
+        for c in candidates:
+            clr = (0, 255, 255) if c.has_bubbles else (0, 165, 255)
+            anns.append({"type": "circle", "center": (c.cx, c.cy), "radius": 18,
+                         "color": clr, "thickness": 2})
+            anns.append({"type": "text", "pos": (c.cx + 20, c.cy - 6),
+                         "text": f"s={c.score:.2f} {'B' if c.has_bubbles else ''}",
+                         "color": clr, "thickness": 2})
+        if shadow is not None:
+            anns.append({"type": "circle", "center": shadow, "radius": 24,
+                         "color": (0, 255, 0), "thickness": 4})
+            anns.append({"type": "line", "pt1": (btn.x, btn.y), "pt2": shadow,
+                         "color": (0, 255, 0), "thickness": 2})
+        anns.append({"type": "circle", "center": (btn.x, btn.y), "radius": 14,
+                     "color": (0, 0, 255), "thickness": 3})
+        dbg.save(frame, "cast_target" if shadow else "no_shadow", annotations=anns)
+
+    def _save_bite_debug(self, win: WindowInfo, bite_result: str) -> None:
+        """Save a debug frame capturing the bite outcome."""
+        bite_frame = capture_window(win)
+        if bite_frame is not None:
+            dbg.save(bite_frame, f"bite_{bite_result}", annotations=[
+                {"type": "text", "pos": (20, 40),
+                 "text": f"result={bite_result}  cast#{self.stats.casts}",
+                 "color": (0, 255, 0), "thickness": 2},
+            ])
+
     def _one_cast(self, win: WindowInfo, pond: PondArea, avg_water_bright: int) -> str:
         """Execute a single cast cycle.
 
@@ -188,7 +238,14 @@ class FishingBot:
         fresh = capture_window(win)
         if fresh is not None:
             frame = fresh
-        shadow = find_best_fish(frame, pond, avg_water_bright)
+        candidates = detect_fish_shadows(frame, pond, avg_water_bright)
+        shadow = find_best_fish(
+            frame, pond, avg_water_bright,
+            avoid=self._last_miss_target,
+        )
+
+        if dbg.is_enabled():
+            self._save_shadow_debug(frame, btn, pond, candidates, shadow)
 
         if shadow is None:
             self.stats.skipped += 1
@@ -207,8 +264,12 @@ class FishingBot:
 
         bite_result = self._wait_for_bite(win)
 
+        if dbg.is_enabled():
+            self._save_bite_debug(win, bite_result)
+
         if bite_result == "caught":
             self.stats.caught += 1
+            self._last_miss_target = None
             self._status(f"Caught! ({self.stats.caught} total)")
         elif bite_result == "jellybean":
             self._status("Out of jellybeans — dismissing dialog")
@@ -220,6 +281,7 @@ class FishingBot:
             return "bucket_full"
         else:
             self.stats.missed += 1
+            self._last_miss_target = (sx, sy)
             self._status("No bite — recasting")
         self._notify_stats()
 
@@ -251,6 +313,15 @@ class FishingBot:
                     "Pond locked: %dx%d at (%d,%d)  water_brightness=%d",
                     pond.width, pond.height, pond.x, pond.y, avg_bright,
                 )
+                dbg.save(frame, "pond", annotations=[
+                    {"type": "rect",
+                     "pt1": (pond.x, pond.y),
+                     "pt2": (pond.x + pond.width, pond.y + pond.height),
+                     "color": (0, 255, 0)},
+                    {"type": "text", "pos": (pond.x, pond.y - 10),
+                     "text": f"pond {pond.width}x{pond.height} bright={avg_bright}",
+                     "color": (0, 255, 0)},
+                ])
                 return pond, avg_bright
             time.sleep(0.5)
         return None
@@ -266,7 +337,7 @@ class FishingBot:
                 return None, None
             frame = capture_window(win)
             if frame is not None:
-                btn = find_template_fast(frame, "red_fishing_button")
+                btn = find_template(frame, "red_fishing_button", threshold=0.55)
                 if btn is not None:
                     return btn, frame
             time.sleep(0.1)
@@ -327,9 +398,9 @@ class FishingBot:
             # Template checks are ~3× more expensive than HSV; skip
             # some polls to keep the loop responsive for catch detection.
             if poll % 3 == 0:
-                if find_template_fast(frame, "jellybean_exit") is not None:
+                if find_template(frame, "jellybean_exit") is not None:
                     return "jellybean"
-                if find_template_fast(frame, "ok_button") is not None:
+                if find_template(frame, "ok_button") is not None:
                     return "bucket_full"
 
             poll += 1
@@ -343,18 +414,18 @@ class FishingBot:
     def _dismiss_blocking_dialog(self, win: WindowInfo) -> None:
         """Click away any blocking dialog (jellybean / bucket-full / catch popup).
 
-        Tries up to 8 times, looking for known dismiss buttons.
+        Tries up to 3 times, looking for known dismiss buttons.
         """
-        for _ in range(8):
+        for _ in range(3):
             frame = capture_window(win)
             if frame is None:
                 time.sleep(0.2)
                 continue
 
             target = (
-                find_template_fast(frame, "jellybean_exit")
-                or find_template_fast(frame, "ok_button")
-                or find_template_fast(frame, "fish_popup_close")
+                find_template(frame, "jellybean_exit", threshold=0.75)
+                or find_template(frame, "ok_button", threshold=0.75)
+                or find_template(frame, "fish_popup_close", threshold=0.75)
             )
             if target is None:
                 return
@@ -363,7 +434,7 @@ class FishingBot:
             inp.ensure_focused()
             time.sleep(0.1)
             inp.click(target.x, target.y, window=win)
-            time.sleep(0.5)
+            time.sleep(1.0)
 
     # ------------------------------------------------------------------
     # Notifications

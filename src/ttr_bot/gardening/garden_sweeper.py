@@ -32,18 +32,11 @@ from ttr_bot.core.screen_capture import capture_window
 from ttr_bot.core.window_manager import find_ttr_window
 from ttr_bot.vision import template_matcher as tm
 from ttr_bot.vision.flower_detector import steering_hint, debug_annotate
+from ttr_bot.gardening.bed_ui import BED_BUTTON_NAMES, classify_bed_state, detect_bed_button
 from ttr_bot.gardening.gardening_bot import GardenBot
 from ttr_bot.utils.logger import log
 
 _DEBUG_DIR = os.path.join(settings.DATA_DIR, "_debug", "sweep")
-
-
-_BED_BUTTONS = (
-    "remove_button",
-    "pick_flower_button",
-    "plant_flower_button",
-    "watering_can_button",
-)
 
 _ARROW_KEYS = ("up", "down", "left", "right")
 
@@ -132,7 +125,7 @@ class GardenSweeper:
         result: SweepResult,
         target_beds: int,
     ) -> None:
-        bed_btn = self._detect_bed(fast=False)
+        bed_btn = self._detect_bed()
         if bed_btn is not None:
             self._status("Already at a bed — interacting")
             self._interact_at_bed(flower_name, bean_sequence, result)
@@ -243,18 +236,14 @@ class GardenSweeper:
     # Bed detection & interaction
     # ------------------------------------------------------------------
 
-    def _detect_bed(self, fast: bool = True) -> str | None:
+    def _detect_bed(self) -> str | None:
         win = find_ttr_window()
         if win is None:
             return None
         frame = capture_window(win)
         if frame is None:
             return None
-        match_fn = tm.find_template_fast if fast else tm.find_template
-        for btn in _BED_BUTTONS:
-            if match_fn(frame, btn) is not None:
-                return btn
-        return None
+        return detect_bed_button(frame)
 
     def _interact_at_bed(
         self,
@@ -262,7 +251,6 @@ class GardenSweeper:
         bean_sequence: str,
         result: SweepResult,
     ) -> None:
-        self._bot._click_cache.clear()
         result.beds_visited += 1
         bed_num = result.beds_visited
         self._status(f"Bed #{bed_num}: checking state…")
@@ -274,13 +262,13 @@ class GardenSweeper:
         if frame is None:
             return
 
-        state = self._classify_bed_state(frame)
+        state = classify_bed_state(frame)
 
         debug_frame = frame.copy()
         cv2.putText(debug_frame, f"STATE: {state}", (20, 40),
                     cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 255), 3)
         y_off = 80
-        for btn_name in _BED_BUTTONS:
+        for btn_name in BED_BUTTON_NAMES:
             m = tm.find_template(frame, btn_name)
             label = f"{btn_name}: {m.confidence:.3f} @({m.x},{m.y})" if m else f"{btn_name}: ---"
             cv2.putText(debug_frame, label, (20, y_off),
@@ -289,47 +277,6 @@ class GardenSweeper:
         self._debug_save(debug_frame, f"bed{bed_num}_state_{state}")
         self._execute_bed_action(state, bed_num, flower_name, bean_sequence, result)
         time.sleep(0.5)
-
-    _WATER_CONF_MIN = 0.85
-
-    def _classify_bed_state(self, frame) -> str:
-        """Return 'pick', 'plant', 'growing', 'water', 'full', or 'unknown'.
-
-        Pick and Remove are mutually exclusive buttons occupying the same
-        sidebar slot.  Both templates can match the same region, so we
-        trust whichever scores higher confidence.
-
-        'full' means the bed has a growing flower that is fully watered
-        (watering can icon shows "Full", matching at low confidence).
-        """
-        remove_match = tm.find_template(frame, "remove_button")
-        pick_match = tm.find_template(frame, "pick_flower_button")
-        water_match = tm.find_template(frame, "watering_can_button")
-
-        if pick_match is not None and remove_match is not None:
-            log.info("  pick=%.3f @(%d,%d)  remove=%.3f @(%d,%d)",
-                     pick_match.confidence, pick_match.x, pick_match.y,
-                     remove_match.confidence, remove_match.x, remove_match.y)
-            if pick_match.confidence >= remove_match.confidence:
-                return "pick"
-
-        if pick_match is not None and remove_match is None:
-            log.info("  pick=%.3f (no remove)", pick_match.confidence)
-            return "pick"
-
-        if tm.find_template(frame, "plant_flower_button") is not None:
-            return "plant"
-
-        if remove_match is not None:
-            can_water = water_match is not None and water_match.confidence >= self._WATER_CONF_MIN
-            log.info("  remove=%.3f  water=%s",
-                     remove_match.confidence,
-                     f"{water_match.confidence:.3f}" if water_match else "none")
-            return "growing" if can_water else "full"
-
-        if water_match is not None and water_match.confidence >= self._WATER_CONF_MIN:
-            return "water"
-        return "unknown"
 
     def _execute_bed_action(
         self,
@@ -365,7 +312,7 @@ class GardenSweeper:
             result.beds_picked += 1
             time.sleep(1.0)
             self._status(f"Bed #{bed_num}: planting {flower_name}")
-            if self._bot._plant_flower(flower_name, bean_sequence):
+            if self._bot._plant_flower_no_pick(flower_name, bean_sequence):
                 result.beds_planted += 1
 
     # ------------------------------------------------------------------

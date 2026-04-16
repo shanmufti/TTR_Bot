@@ -81,20 +81,17 @@ def build_relative_shadow_mask(frame_bgr: np.ndarray, water_mask: np.ndarray) ->
     if len(water_pixels) == 0:
         return np.zeros(gray.shape, dtype=np.uint8)
 
-    # Aggressively erode to keep only the pond interior, far from
-    # docks, posts, lamps, and UI labels that cause false positives.
-    erode_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (101, 101))
+    erode_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (31, 31))
     interior_water = cv2.erode(water_mask, erode_kernel, iterations=1)
 
-    # Build a local-average reference by heavily blurring the water area.
     water_median = float(np.median(water_pixels))
     filled = gray.copy()
     filled[interior_water == 0] = np.uint8(water_median)
 
-    local_avg = cv2.GaussianBlur(filled, (0, 0), sigmaX=40)
+    local_avg = cv2.GaussianBlur(filled, (0, 0), sigmaX=30)
 
     diff = local_avg.astype(np.int16) - gray.astype(np.int16)
-    dark_mask = (diff >= 30).astype(np.uint8) * 255
+    dark_mask = (diff >= 12).astype(np.uint8) * 255
 
     return cv2.bitwise_and(dark_mask, interior_water)
 

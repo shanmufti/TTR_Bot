@@ -16,7 +16,6 @@ ACCENT = "#e94560"
 ENTRY_BG = "#16213e"
 _STOP_LABEL = "■ Stop"
 _MSG_SELECT_FLOWER = "Select a flower first"
-_MSG_CALIBRATION_FAILED = "Calibration failed — stand at garden first"
 
 
 class GardeningTab:
@@ -49,137 +48,101 @@ class GardeningTab:
         parent = self._parent
         pad = {"padx": 8, "pady": 4}
 
-        # ---- Plant section ----
-        plant_frame = tk.LabelFrame(
+        # ---- Watch section ----
+        watch_frame = tk.LabelFrame(
             parent,
-            text="Plant Flower",
+            text="Garden Watch",
             font=("Helvetica", 11, "bold"),
             fg=FG,
             bg=BG,
             bd=1,
             relief="groove",
         )
-        plant_frame.pack(fill="x", **pad)
+        watch_frame.pack(fill="x", **pad)
 
-        row = 0
+        # Flower selection row
+        flower_row = tk.Frame(watch_frame, bg=BG)
+        flower_row.pack(fill="x", padx=8, pady=(4, 2))
 
-        tk.Label(plant_frame, text="Bean count:", fg=FG, bg=BG).grid(
-            row=row, column=0, sticky="w", padx=8, pady=3,
+        tk.Label(flower_row, text="Bean count:", fg=FG, bg=BG).pack(
+            side="left", padx=(0, 4),
         )
         self._bean_count_var = tk.IntVar(value=3)
         bean_spin = tk.Spinbox(
-            plant_frame,
+            flower_row,
             from_=1, to=8,
             textvariable=self._bean_count_var,
             width=4, bg=ENTRY_BG, fg=FG, insertbackground=FG,
             command=self._on_bean_count_changed,
         )
-        bean_spin.grid(row=row, column=1, sticky="w", padx=4, pady=3)
+        bean_spin.pack(side="left", padx=(0, 12))
         bean_spin.bind("<Return>", lambda _: self._on_bean_count_changed())
-        row += 1
 
-        tk.Label(plant_frame, text="Flower:", fg=FG, bg=BG).grid(
-            row=row, column=0, sticky="w", padx=8, pady=3,
+        tk.Label(flower_row, text="Flower:", fg=FG, bg=BG).pack(
+            side="left", padx=(0, 4),
         )
         self._flower_var = tk.StringVar()
         self._flower_combo = ttk.Combobox(
-            plant_frame,
+            flower_row,
             textvariable=self._flower_var,
             state="readonly",
-            width=24,
+            width=20,
         )
-        self._flower_combo.grid(row=row, column=1, sticky="w", padx=4, pady=3)
+        self._flower_combo.pack(side="left")
         self._flower_combo.bind(
             "<<ComboboxSelected>>", lambda _: self._on_flower_changed()
         )
-        row += 1
 
-        tk.Label(plant_frame, text="Recipe:", fg=FG, bg=BG).grid(
-            row=row, column=0, sticky="w", padx=8, pady=3,
+        # Recipe display
+        recipe_row = tk.Frame(watch_frame, bg=BG)
+        recipe_row.pack(fill="x", padx=8, pady=(0, 2))
+        tk.Label(recipe_row, text="Recipe:", fg=FG, bg=BG).pack(
+            side="left", padx=(0, 4),
         )
         self._recipe_canvas = tk.Canvas(
-            plant_frame, height=24, bg=BG, highlightthickness=0,
+            recipe_row, height=24, bg=BG, highlightthickness=0,
         )
-        self._recipe_canvas.grid(row=row, column=1, sticky="w", padx=4, pady=3)
-        row += 1
+        self._recipe_canvas.pack(side="left")
 
-        plant_btn_frame = tk.Frame(plant_frame, bg=BG)
-        plant_btn_frame.grid(
-            row=row, column=0, columnspan=2, sticky="w", padx=8, pady=6,
-        )
-
-        self._plant_btn = tk.Button(
-            plant_btn_frame,
-            text="▶ Plant",
-            font=("Helvetica", 12, "bold"),
-            highlightbackground="#1a8f3c",
-            width=12,
-            command=self._on_plant,
-        )
-        self._plant_btn.pack(side="left", padx=(0, 8))
-
-        self._plant_stop_btn = tk.Button(
-            plant_btn_frame,
-            text=_STOP_LABEL,
-            font=("Helvetica", 12, "bold"),
-            highlightbackground=ACCENT,
-            width=8,
-            command=self._on_stop,
-            state="disabled",
-        )
-        self._plant_stop_btn.pack(side="left")
-
-        # ---- Sweep section ----
-        sweep_frame = tk.LabelFrame(
-            parent,
-            text="Garden Sweep",
-            font=("Helvetica", 11, "bold"),
-            fg=FG,
-            bg=BG,
-            bd=1,
-            relief="groove",
-        )
-        sweep_frame.pack(fill="x", **pad)
-
-        sweep_info = tk.Label(
-            sweep_frame,
-            text="Visually scan for flowers, walk to each bed,\n"
-                 "and pick / plant / water automatically.",
+        watch_info = tk.Label(
+            watch_frame,
+            text="You walk — I garden. Move to each bed and\n"
+                 "I'll auto pick / plant / water.",
             font=("Helvetica", 9),
             fg="#a0a0a0",
             bg=BG,
             justify="left",
         )
-        sweep_info.pack(padx=8, pady=(4, 2), anchor="w")
+        watch_info.pack(padx=8, pady=(4, 2), anchor="w")
 
-        sweep_btns = tk.Frame(sweep_frame, bg=BG)
-        sweep_btns.pack(fill="x", padx=8, pady=(2, 6))
+        watch_btns = tk.Frame(watch_frame, bg=BG)
+        watch_btns.pack(fill="x", padx=8, pady=(2, 6))
 
-        self._sweep_btn = tk.Button(
-            sweep_btns,
-            text="▶ Sweep",
+        self._watch_btn = tk.Button(
+            watch_btns,
+            text="▶ Watch",
             font=("Helvetica", 12, "bold"),
             highlightbackground="#8e44ad",
             width=12,
-            command=self._on_sweep,
+            command=self._on_watch,
         )
-        self._sweep_btn.pack(side="left", padx=(0, 8))
+        self._watch_btn.pack(side="left", padx=(0, 8))
 
-        self._sweep_stop_btn = tk.Button(
-            sweep_btns,
+        self._watch_stop_btn = tk.Button(
+            watch_btns,
             text=_STOP_LABEL,
             font=("Helvetica", 12, "bold"),
             highlightbackground=ACCENT,
             width=8,
-            command=self._on_stop_sweep,
+            command=self._on_stop_watch,
             state="disabled",
         )
-        self._sweep_stop_btn.pack(side="left", padx=(0, 8))
+        self._watch_stop_btn.pack(side="left", padx=(0, 8))
 
-        self._sweep_progress_var = tk.StringVar(value="")
+        self._watch_progress_var = tk.StringVar(value="")
         tk.Label(
-            sweep_btns,
-            textvariable=self._sweep_progress_var,
+            watch_btns,
+            textvariable=self._watch_progress_var,
             font=("Helvetica", 10),
             fg="#a0a0a0",
             bg=BG,
@@ -237,37 +200,7 @@ class GardeningTab:
     # Action handlers
     # ------------------------------------------------------------------
 
-    def _on_plant(self) -> None:
-        if self._bot.running:
-            return
-        name = self._flower_var.get()
-        info = lookup_flower(name)
-        if info is None:
-            self._status_var.set(_MSG_SELECT_FLOWER)
-            return
-
-        from ttr_bot.vision import template_matcher as tm
-
-        if tm._global_scale is None:
-            self._calibrate_fn()
-        if tm._global_scale is None:
-            self._status_var.set(_MSG_CALIBRATION_FAILED)
-            return
-
-        _, beans = info
-        self._set_action_buttons_running()
-        self._bot.start_plant(name, beans)
-
-    def _on_stop(self) -> None:
-        if self._routine_runner.running:
-            self._routine_runner.stop()
-            self._sweep_btn.config(state="normal")
-            self._sweep_stop_btn.config(state="disabled")
-            self._sweep_progress_var.set("")
-        self._bot.stop()
-        self._set_action_buttons_idle()
-
-    def _on_sweep(self) -> None:
+    def _on_watch(self) -> None:
         if self._routine_runner.running or self._bot.running:
             return
 
@@ -276,37 +209,16 @@ class GardeningTab:
             self._status_var.set(_MSG_SELECT_FLOWER)
             return
 
-        from ttr_bot.vision import template_matcher as tm_mod
+        self._watch_btn.config(state="disabled")
+        self._watch_stop_btn.config(state="normal")
+        self._status_var.set("Starting watcher — calibrating…")
+        self._routine_runner.start_watch(default_flower=flower_name)
 
-        if tm_mod._global_scale is None:
-            self._calibrate_fn()
-        if tm_mod._global_scale is None:
-            self._status_var.set(_MSG_CALIBRATION_FAILED)
-            return
-
-        self._sweep_btn.config(state="disabled")
-        self._sweep_stop_btn.config(state="normal")
-        self._set_action_buttons_running()
-        self._routine_runner.start_sweep(default_flower=flower_name)
-
-    def _on_stop_sweep(self) -> None:
+    def _on_stop_watch(self) -> None:
         self._routine_runner.stop()
-        self._sweep_btn.config(state="normal")
-        self._sweep_stop_btn.config(state="disabled")
-        self._sweep_progress_var.set("")
-        self._set_action_buttons_idle()
-
-    # ------------------------------------------------------------------
-    # Button state helpers
-    # ------------------------------------------------------------------
-
-    def _set_action_buttons_running(self) -> None:
-        self._plant_btn.config(state="disabled")
-        self._plant_stop_btn.config(state="normal")
-
-    def _set_action_buttons_idle(self) -> None:
-        self._plant_btn.config(state="normal")
-        self._plant_stop_btn.config(state="disabled")
+        self._watch_btn.config(state="normal")
+        self._watch_stop_btn.config(state="disabled")
+        self._watch_progress_var.set("")
 
     # ------------------------------------------------------------------
     # Thread-safe callbacks
@@ -324,26 +236,23 @@ class GardeningTab:
 
     def _on_bot_ended_ui(self, reason: str) -> None:
         self._status_var.set(f"Gardening: {reason}")
-        self._set_action_buttons_idle()
 
     def _on_routine_progress_thread(self, progress: RoutineProgress) -> None:
         self._root.after(0, self._on_routine_progress_ui, progress)
 
     def _on_routine_progress_ui(self, progress: RoutineProgress) -> None:
-        self._sweep_progress_var.set(
-            f"Bed {progress.current_bed}/{progress.total_beds} — "
-            f"planted {progress.flowers_planted}"
+        self._watch_progress_var.set(
+            f"Beds: {progress.current_bed} — planted {progress.flowers_planted}"
         )
 
     def _on_routine_ended_thread(self, reason: str) -> None:
         self._root.after(0, self._on_routine_ended_ui, reason)
 
     def _on_routine_ended_ui(self, reason: str) -> None:
-        self._status_var.set(f"Sweep: {reason}")
-        self._sweep_btn.config(state="normal")
-        self._sweep_stop_btn.config(state="disabled")
-        self._sweep_progress_var.set("")
-        self._set_action_buttons_idle()
+        self._status_var.set(f"Watch: {reason}")
+        self._watch_btn.config(state="normal")
+        self._watch_stop_btn.config(state="disabled")
+        self._watch_progress_var.set("")
 
     # ------------------------------------------------------------------
     # Cleanup

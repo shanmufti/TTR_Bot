@@ -9,6 +9,7 @@ import logging
 from ttr_bot.config import settings
 from ttr_bot.core.window_manager import is_window_available
 from ttr_bot.fishing.fishing_bot import FishingBot, FishingConfig, FishingStats
+from ttr_bot.fishing.cast_recorder import CastRecorder, fit_cast_params
 from ttr_bot.ui.overlay import OverlayWindow
 from ttr_bot.utils.logger import log
 
@@ -54,6 +55,7 @@ class App:
         self._root.configure(bg=self.BG)
 
         self._bot = FishingBot()
+        self._recorder = CastRecorder()
         self._overlay: OverlayWindow | None = None
 
         self._build_ui()
@@ -203,20 +205,21 @@ class App:
         )
         self._pause_btn.pack(side="left")
 
-        # ---- Cast calibration ----
-        cal_frame = tk.Frame(parent, bg=bg)
-        cal_frame.pack(fill="x", padx=8, pady=(0, 4))
+        # ---- Cast recording ----
+        rec_frame = tk.Frame(parent, bg=bg)
+        rec_frame.pack(fill="x", padx=8, pady=(0, 4))
 
-        self._cast_cal_btn = tk.Button(
-            cal_frame, text="Calibrate Cast", font=("Helvetica", 11),
-            highlightbackground="#e67e22", width=14, command=self._on_calibrate_cast,
+        self._record_btn = tk.Button(
+            rec_frame, text="Record Casts", font=("Helvetica", 11),
+            highlightbackground="#e67e22", width=14, command=self._on_record_toggle,
         )
-        self._cast_cal_btn.pack(side="left", padx=(0, 8))
+        self._record_btn.pack(side="left", padx=(0, 8))
 
-        self._cast_cal_status = tk.Label(
-            cal_frame, text="", font=("Helvetica", 10), fg="#e67e22", bg=bg,
+        self._record_status = tk.Label(
+            rec_frame, text="Fish manually to calibrate casting",
+            font=("Helvetica", 10), fg="#e67e22", bg=bg,
         )
-        self._cast_cal_status.pack(side="left")
+        self._record_status.pack(side="left")
 
     # ------------------------------------------------------------------
     # Logger / callbacks
@@ -241,21 +244,46 @@ class App:
         if self._bot.running:
             return
 
+        import threading
+        from ttr_bot.core.window_manager import find_ttr_window, set_calibrated_bounds
+        from ttr_bot.core.screen_capture import capture_window
+
+        self._start_btn.config(state="disabled")
         self._status_var.set("Calibrating…")
-        self._root.update_idletasks()
-        self._on_calibrate()
 
-        from ttr_bot.vision import template_matcher as tm
-        if tm._global_scale is None:
-            self._status_var.set("Calibration failed — sit on dock first!")
-            return
+        def _calibrate_and_start() -> None:
+            from ttr_bot.vision.template_matcher import clear_cache, calibrate_scale
 
-        from ttr_bot.core.cast_calibration import cast_calibration
-        if not cast_calibration.is_calibrated:
-            cast_calibration.load()
-        if not cast_calibration.is_calibrated:
-            self._status_var.set("Run Calibrate Cast first!")
-            return
+            win = find_ttr_window()
+            if win is None:
+                self._root.after(0, self._start_failed, "TTR window not found")
+                return
+
+            set_calibrated_bounds(win.x, win.y, win.width, win.height,
+                                  window_id=win.window_id, pid=win.pid)
+            log.info("Window locked: %dx%d at (%d,%d)", win.width, win.height, win.x, win.y)
+
+            clear_cache()
+            frame = capture_window(win)
+            if frame is None:
+                self._root.after(0, self._start_failed, "Capture failed")
+                return
+
+            scale = calibrate_scale(frame)
+            if scale < 0:
+                self._root.after(0, self._start_failed, "Calibration failed — sit on dock first!")
+                return
+
+            self._root.after(0, self._start_fishing, scale, win.width, win.height)
+
+        threading.Thread(target=_calibrate_and_start, daemon=True).start()
+
+    def _start_failed(self, msg: str) -> None:
+        self._status_var.set(msg)
+        self._start_btn.config(state="normal")
+
+    def _start_fishing(self, scale: float, w: int, h: int) -> None:
+        self._status_var.set(f"Calibrated: {w}×{h} scale={scale:.1f}")
 
         cfg = FishingConfig(
             max_casts=self._casts_var.get(),
@@ -265,7 +293,6 @@ class App:
         if self._overlay_var.get() and self._overlay is None:
             self._overlay = OverlayWindow()
 
-        self._start_btn.config(state="disabled")
         self._stop_btn.config(state="normal")
         self._pause_btn.config(state="normal")
         self._bot.start(cfg)
@@ -282,8 +309,9 @@ class App:
         self._pause_btn.config(text=text)
 
     def _on_calibrate(self) -> None:
+        import threading
+
         from ttr_bot.core.window_manager import find_ttr_window, set_calibrated_bounds
-        from ttr_bot.vision.template_matcher import clear_cache, calibrate_scale
         from ttr_bot.core.screen_capture import capture_window
 
         win = find_ttr_window()
@@ -291,128 +319,74 @@ class App:
             self._status_var.set("Calibration failed — TTR not found")
             return
 
-        set_calibrated_bounds(win.x, win.y, win.width, win.height)
+        set_calibrated_bounds(win.x, win.y, win.width, win.height,
+                              window_id=win.window_id, pid=win.pid)
         log.info("Window locked: %dx%d at (%d,%d)", win.width, win.height, win.x, win.y)
 
-        clear_cache()
         frame = capture_window(win)
         if frame is None:
             self._status_var.set("Calibration failed — capture error")
             return
 
-        scale = calibrate_scale(frame)
+        self._calibrate_btn.config(state="disabled")
+        self._status_var.set("Calibrating…")
+
+        def _run_calibration() -> None:
+            from ttr_bot.vision.template_matcher import clear_cache, calibrate_scale
+            clear_cache()
+            scale = calibrate_scale(frame)
+            self._root.after(0, self._calibration_done, scale, win.width, win.height)
+
+        threading.Thread(target=_run_calibration, daemon=True).start()
+
+    def _calibration_done(self, scale: float, w: int, h: int) -> None:
+        self._calibrate_btn.config(state="normal")
         if scale < 0:
             self._status_var.set("Calibration failed — no known button visible")
         else:
-            self._status_var.set(f"Calibrated: {win.width}×{win.height} scale={scale:.1f}")
+            self._status_var.set(f"Calibrated: {w}×{h} scale={scale:.1f}")
 
-    def _on_calibrate_cast(self) -> None:
-        """Fully automatic cast calibration — bot casts 3 times and detects landings."""
+    def _on_record_toggle(self) -> None:
+        """Start or stop recording manual casts for calibration."""
         import threading
 
-        def _run() -> None:
-            import time
-            from ttr_bot.core.window_manager import find_ttr_window, focus_window
-            from ttr_bot.core.screen_capture import capture_window
-            from ttr_bot.core.input_controller import fishing_cast_raw, ensure_focused
-            from ttr_bot.vision.template_matcher import find_template
-            from ttr_bot.vision.pond_detector import detect_pond
-            from ttr_bot.core.cast_calibration import (
-                CastCalibration, CalibrationSample, CALIBRATION_DRAGS,
-                cast_calibration, detect_bobber,
+        if self._recorder.recording:
+            self._recorder.stop()
+            self._record_btn.config(text="Record Casts", state="disabled")
+            self._record_status.config(text="Stopping…")
+
+            def _finish_recording() -> None:
+                if self._recorder._thread is not None:
+                    self._recorder._thread.join(timeout=5.0)
+                samples = list(self._recorder.samples)
+                self._root.after(0, self._on_recording_done, samples)
+
+            threading.Thread(target=_finish_recording, daemon=True).start()
+        else:
+            self._recorder.on_status = lambda msg: self._root.after(
+                0, self._record_status.config, {"text": msg},
             )
+            self._recorder.start()
+            self._record_btn.config(text="Stop Recording")
+            self._record_status.config(text="Fish normally — recording…")
 
-            self._cast_cal_btn.config(state="disabled")
-            total = len(CALIBRATION_DRAGS)
-
-            win = find_ttr_window()
-            if win is None:
-                self._cast_cal_status.config(text="TTR not found")
-                self._cast_cal_btn.config(state="normal")
-                return
-
-            focus_window()
-            time.sleep(0.3)
-
-            frame = capture_window(win)
-            if frame is None:
-                self._cast_cal_status.config(text="Capture failed")
-                self._cast_cal_btn.config(state="normal")
-                return
-
-            btn = find_template(frame, "red_fishing_button")
-            if btn is None:
-                self._cast_cal_status.config(text="Sit on dock first!")
-                self._cast_cal_btn.config(state="normal")
-                return
-
-            pond = detect_pond(frame)
-            if pond.empty:
-                self._cast_cal_status.config(text="Pond not detected")
-                self._cast_cal_btn.config(state="normal")
-                return
-
-            new_cal = CastCalibration()
-
-            for idx, (drag_dx, drag_dy) in enumerate(CALIBRATION_DRAGS):
-                label = f"Auto-casting {idx + 1}/{total}…"
-                self._cast_cal_status.config(text=label)
-                log.info("Cast calibration: %s drag=(%+d,%+d)", label, drag_dx, drag_dy)
-
-                before = capture_window(win)
-                if before is None:
-                    continue
-
-                new_btn = find_template(before, "red_fishing_button")
-                if new_btn is not None:
-                    btn = new_btn
-                else:
-                    continue
-
-                ensure_focused()
-                fishing_cast_raw(btn.x, btn.y, drag_dx, drag_dy, window=win)
-                time.sleep(2.0)
-
-                after = capture_window(win)
-                if after is None:
-                    continue
-
-                landing = detect_bobber(
-                    before, after, pond.x, pond.y, pond.width, pond.height,
+    def _on_recording_done(self, samples: list) -> None:
+        self._record_btn.config(state="normal")
+        if len(samples) >= 2:
+            self._record_status.config(text="Fitting cast curves…")
+            params = fit_cast_params(samples)
+            if params is not None:
+                from ttr_bot.core.input_controller import reload_cast_params
+                reload_cast_params()
+                self._record_status.config(
+                    text=f"Done! power={params.power_base:.1f} aim={params.aim_base:.1f}"
                 )
-                if landing is None:
-                    self._cast_cal_status.config(text=f"Bobber not found ({idx + 1}/{total})")
-                    time.sleep(12.0)
-                    continue
-
-                bx, by = landing
-                land_dx = float(bx - btn.x)
-                land_dy = float(by - btn.y)
-                new_cal.add_sample(CalibrationSample(drag_dx, drag_dy, land_dx, land_dy))
-
-                self._cast_cal_status.config(text=f"Waiting for reset ({idx + 1}/{total})…")
-                deadline = time.monotonic() + 15.0
-                while time.monotonic() < deadline:
-                    time.sleep(0.5)
-                    f = capture_window(win)
-                    if f is not None and find_template(f, "red_fishing_button") is not None:
-                        break
-                time.sleep(0.5)
-
-            if new_cal.sample_count >= 2 and new_cal.fit():
-                cast_calibration._samples = new_cal._samples
-                cast_calibration._matrix = new_cal._matrix
-                cast_calibration.save()
-                self._cast_cal_status.config(text="Cast calibration complete!")
-                log.info("Cast calibration complete (%d samples)", new_cal.sample_count)
             else:
-                self._cast_cal_status.config(
-                    text=f"Calibration failed ({new_cal.sample_count} samples)"
-                )
-
-            self._cast_cal_btn.config(state="normal")
-
-        threading.Thread(target=_run, daemon=True).start()
+                self._record_status.config(text="Fit failed — try more casts")
+        else:
+            self._record_status.config(
+                text=f"Need 2+ casts, got {len(samples)}"
+            )
 
     # ------------------------------------------------------------------
     # Overlay

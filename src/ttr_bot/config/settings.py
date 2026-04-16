@@ -1,13 +1,12 @@
 """All configurable thresholds, delays, and defaults for the TTR bot."""
 
 import os
+from pathlib import Path
 
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
-PROJECT_ROOT = os.path.dirname(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-)
+PROJECT_ROOT = str(Path(__file__).resolve().parents[3])
 DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 TEMPLATES_DIR = os.path.join(DATA_DIR, "templates")
 LOGS_DIR = os.path.join(PROJECT_ROOT, "logs")
@@ -33,7 +32,7 @@ BETWEEN_CAST_DELAY_S = 0.2  # wait between successive casts (rod reset animation
 # ---------------------------------------------------------------------------
 # Vision – water / pond
 # ---------------------------------------------------------------------------
-WATER_HUE_RANGE = (80, 140)  # H range in HSV (teal/cyan)
+WATER_HUE_RANGE = (60, 140)  # H range in HSV (green through cyan/blue)
 WATER_SAT_MIN = 40  # minimum saturation
 WATER_VAL_MIN = 50  # minimum value/brightness
 POND_TOP_MARGIN = 80  # skip top UI region
@@ -46,8 +45,8 @@ POND_PADDING = 15  # padding around detected pond area
 # Vision – fish shadow detection
 # ---------------------------------------------------------------------------
 SHADOW_MIN_ASPECT = 0.3  # minimum blob aspect ratio
-SHADOW_MAX_ASPECT = 3.0  # maximum blob aspect ratio
-SHADOW_MIN_FILL = 0.2  # minimum fill ratio of bounding box
+SHADOW_MAX_ASPECT = 2.5  # maximum blob aspect ratio
+SHADOW_MIN_FILL = 0.3  # minimum fill ratio of bounding box
 SHADOW_MIN_SIZE = 15  # minimum blob dimension (px)
 SHADOW_WATER_CHECK_RADIUS = 30  # radius for water-surrounding check
 SHADOW_WATER_MIN_RATIO = 0.35  # min fraction of surrounding ring that is water
@@ -112,11 +111,11 @@ PYAUTOGUI_FAILSAFE = True  # move mouse to corner to abort
 # ---------------------------------------------------------------------------
 # Gardening
 # ---------------------------------------------------------------------------
-GARDEN_POST_BEAN_DELAY_S = 0.1  # wait after clicking each jellybean
-GARDEN_POST_PLANT_DELAY_S = 6.0  # wait after clicking the Plant button
-GARDEN_POST_CONFIRM_DELAY_S = 1.0  # wait after clicking OK confirmation
-GARDEN_POST_WATER_DELAY_S = 3.0  # wait between watering can clicks
-GARDEN_POST_PICK_DELAY_S = 4.0  # wait after picking a flower (bed becomes empty)
+GARDEN_POST_BEAN_DELAY_S = 0.05  # wait after clicking each jellybean
+GARDEN_POST_PLANT_DELAY_S = 3.5  # wait after clicking Plant (animation); OK poll handles the rest
+GARDEN_POST_CONFIRM_DELAY_S = 0.3  # wait after clicking OK confirmation
+GARDEN_POST_WATER_DELAY_S = 1.5  # wait between watering can clicks
+GARDEN_POST_PICK_DELAY_S = 2.0  # wait after picking a flower (bed becomes empty)
 GARDEN_WATERS_AFTER_PLANT = 1  # times to water after planting
 GARDEN_FIND_TIMEOUT_S = 10.0  # max seconds to poll for a template
 

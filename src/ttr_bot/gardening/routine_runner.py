@@ -72,10 +72,30 @@ class RoutineRunner:
         )
         self._thread.start()
 
+    def start_watch(self, default_flower: str = "") -> None:
+        """Start passive watcher: polls screen, auto-actions beds."""
+        if self._running:
+            log.warning("Routine already running")
+            return
+
+        self._default_flower = default_flower
+        self._stop_event.clear()
+        self._bot.reset()
+        self._running = True
+        self._thread = threading.Thread(
+            target=self._run_watch,
+            daemon=True,
+        )
+        self._thread.start()
+
     def stop(self) -> None:
         self._stop_event.set()
         self._bot.stop()
+        thread = self._thread
+        if thread is not None:
+            thread.join(timeout=5.0)
         self._running = False
+        self._thread = None
         self._release_all_keys()
 
     # ------------------------------------------------------------------
@@ -110,6 +130,36 @@ class RoutineRunner:
 
         except Exception as exc:
             log.exception("Sweep routine crashed")
+            self._finish(f"Error: {exc}")
+
+    def _run_watch(self) -> None:
+        from ttr_bot.gardening.garden_watcher import GardenWatcher
+
+        try:
+            flower, beans = self._validate_flower()
+            if flower is None:
+                return
+
+            watcher = GardenWatcher(self._bot, self._stop_event)
+            watcher.on_status = lambda msg: self._notify_status(msg)
+
+            result = watcher.watch(flower, beans)
+
+            progress = RoutineProgress(
+                current_bed=result.beds_actioned,
+                total_beds=0,
+                flowers_planted=result.beds_planted,
+                status="Stopped" if self._stop_event.is_set() else "Done",
+            )
+            self._notify_progress(progress)
+            self._finish(
+                "User stopped"
+                if self._stop_event.is_set()
+                else f"Done — {result.beds_actioned} beds actioned"
+            )
+
+        except Exception as exc:
+            log.exception("Watcher routine crashed")
             self._finish(f"Error: {exc}")
 
     def _validate_flower(self) -> tuple[str | None, str | None]:
