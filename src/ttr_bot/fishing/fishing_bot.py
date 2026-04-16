@@ -292,6 +292,7 @@ class FishingBot:
             pond,
             avg_water_bright,
             avoid=self._last_miss_target,
+            candidates=candidates,
         )
 
         if dbg.is_enabled():

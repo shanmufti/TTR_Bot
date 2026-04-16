@@ -197,9 +197,15 @@ def rank_fish(
     frame_bgr: np.ndarray,
     pond: PondArea,
     avg_water_bright: int = 100,
+    *,
+    candidates: list[FishCandidate] | None = None,
 ) -> list[tuple[int, int, float]]:
-    """Return all shadow targets ranked by score: [(x, y, score), ...]."""
-    candidates = detect_fish_shadows(frame_bgr, pond, avg_water_bright)
+    """Return all shadow targets ranked by score: [(x, y, score), ...].
+
+    If *candidates* is provided, skip detection and rank the given list.
+    """
+    if candidates is None:
+        candidates = detect_fish_shadows(frame_bgr, pond, avg_water_bright)
     if not candidates:
         return []
 
@@ -223,13 +229,15 @@ def find_best_fish(
     avg_water_bright: int = 100,
     *,
     avoid: tuple[int, int] | None = None,
+    candidates: list[FishCandidate] | None = None,
 ) -> tuple[int, int] | None:
     """Return (x, y) of the best fish shadow, or None.
 
+    If *candidates* is provided, skip detection and rank the given list.
     If *avoid* is set, skip any candidate within ``_NEAR_THRESHOLD`` px
     so the bot cycles through different shadows after a miss.
     """
-    ranked = rank_fish(frame_bgr, pond, avg_water_bright)
+    ranked = rank_fish(frame_bgr, pond, avg_water_bright, candidates=candidates)
     if not ranked:
         log.info("find_best_fish: no shadows found")
         return None
