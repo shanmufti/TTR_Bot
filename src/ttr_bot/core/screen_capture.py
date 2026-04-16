@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import CoreFoundation
 import numpy as np
 import Quartz
-import CoreFoundation
 from Quartz import (
     CGRectNull,
     CGWindowListCreateImage,
@@ -13,7 +13,7 @@ from Quartz import (
     kCGWindowListOptionIncludingWindow,
 )
 
-from ttr_bot.core.window_manager import find_ttr_window, WindowInfo
+from ttr_bot.core.window_manager import WindowInfo, find_ttr_window
 from ttr_bot.utils.logger import log
 
 

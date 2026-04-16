@@ -18,10 +18,10 @@ Navigation approach:
 from __future__ import annotations
 
 import os
-import time
 import threading
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 import cv2
 import pyautogui
@@ -30,11 +30,11 @@ from ttr_bot.config import settings
 from ttr_bot.core import input_controller as inp
 from ttr_bot.core.screen_capture import capture_window
 from ttr_bot.core.window_manager import find_ttr_window
-from ttr_bot.vision import template_matcher as tm
-from ttr_bot.vision.flower_detector import steering_hint, debug_annotate
 from ttr_bot.gardening.bed_ui import BED_BUTTON_NAMES, classify_bed_state, detect_bed_button
 from ttr_bot.gardening.gardening_bot import GardenBot
 from ttr_bot.utils.logger import log
+from ttr_bot.vision import template_matcher as tm
+from ttr_bot.vision.flower_detector import debug_annotate, steering_hint
 
 _DEBUG_DIR = os.path.join(settings.DATA_DIR, "_debug", "sweep")
 
@@ -106,9 +106,7 @@ class GardenSweeper:
 
         result.total_time_s = time.monotonic() - t0
         result.reason = (
-            "User stopped"
-            if self._stop_event.is_set()
-            else f"Done — {result.beds_visited} beds"
+            "User stopped" if self._stop_event.is_set() else f"Done — {result.beds_visited} beds"
         )
         self._print_summary(result)
         return result
@@ -175,9 +173,7 @@ class GardenSweeper:
                 self._status(f"Flowers {direction} ({magnitude:.2f}) — turning {turn_dur:.2f}s")
                 self._key_burst([direction], turn_dur)
 
-            self._status(
-                f"Walking toward flowers (visited {result.beds_visited}/{target_beds})"
-            )
+            self._status(f"Walking toward flowers (visited {result.beds_visited}/{target_beds})")
             outcome = self._walk_and_scan(["up"], settings.SWEEP_WALK_BURST_S)
             if outcome == "bed_found":
                 self._interact_at_bed(flower_name, bean_sequence, result)
@@ -265,14 +261,22 @@ class GardenSweeper:
         state = classify_bed_state(frame)
 
         debug_frame = frame.copy()
-        cv2.putText(debug_frame, f"STATE: {state}", (20, 40),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 255), 3)
+        cv2.putText(
+            debug_frame,
+            f"STATE: {state}",
+            (20, 40),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            1.2,
+            (0, 255, 255),
+            3,
+        )
         y_off = 80
         for btn_name in BED_BUTTON_NAMES:
             m = tm.find_template(frame, btn_name)
             label = f"{btn_name}: {m.confidence:.3f} @({m.x},{m.y})" if m else f"{btn_name}: ---"
-            cv2.putText(debug_frame, label, (20, y_off),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+            cv2.putText(
+                debug_frame, label, (20, y_off), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2
+            )
             y_off += 30
         self._debug_save(debug_frame, f"bed{bed_num}_state_{state}")
         self._execute_bed_action(state, bed_num, flower_name, bean_sequence, result)

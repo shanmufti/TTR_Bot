@@ -17,8 +17,8 @@ Usage:
 
 import json
 import os
-import time
 import threading
+import time
 
 from pynput import keyboard, mouse
 
@@ -26,7 +26,10 @@ from ttr_bot.config.settings import SELL_PATHS_DIR
 from ttr_bot.core.window_manager import find_ttr_window
 
 TRACKED_KEYS = {
-    keyboard.Key.up, keyboard.Key.down, keyboard.Key.left, keyboard.Key.right,
+    keyboard.Key.up,
+    keyboard.Key.down,
+    keyboard.Key.left,
+    keyboard.Key.right,
 }
 
 _events: list[dict] = []
@@ -42,6 +45,7 @@ def _ts() -> float:
 # ---------------------------------------------------------------------------
 # Keyboard listener
 # ---------------------------------------------------------------------------
+
 
 def _on_key_press(key):
     if key == keyboard.Key.f8:
@@ -67,6 +71,7 @@ def _on_key_release(key):
 # Mouse listener
 # ---------------------------------------------------------------------------
 
+
 def _on_click(x, y, button, pressed):
     if button == mouse.Button.left:
         action = "mouse_down" if pressed else "mouse_up"
@@ -82,6 +87,7 @@ def _on_click(x, y, button, pressed):
 # ---------------------------------------------------------------------------
 # Recording phases
 # ---------------------------------------------------------------------------
+
 
 def _record_phase(phase_name: str) -> list[dict]:
     global _events, _start_time
@@ -131,6 +137,7 @@ def _wait_for_f7():
 
 def main():
     import argparse
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--name", required=True, help="Name for this sell path")
     args = parser.parse_args()
@@ -148,12 +155,9 @@ def main():
     print()
 
     phases = [
-        ("1/3", "WALK TO FISHERMAN",
-         "Walk toward the fisherman NPC until the sell dialog opens."),
-        ("2/3", "SELL FISH",
-         "Click Sell All and dismiss any dialogs."),
-        ("3/3", "WALK BACK TO DOCK",
-         "Walk back to the dock and sit down to fish."),
+        ("1/3", "WALK TO FISHERMAN", "Walk toward the fisherman NPC until the sell dialog opens."),
+        ("2/3", "SELL FISH", "Click Sell All and dismiss any dialogs."),
+        ("3/3", "WALK BACK TO DOCK", "Walk back to the dock and sit down to fish."),
     ]
 
     results: list[list[dict]] = []

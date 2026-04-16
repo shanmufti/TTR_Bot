@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import tkinter as tk
+from collections.abc import Callable
 from tkinter import ttk
-from typing import Callable
 
 from ttr_bot.gardening.flowers import BEAN_COLORS, get_flowers_by_beans, lookup_flower
 from ttr_bot.gardening.gardening_bot import GardenBot, GardeningStats
-from ttr_bot.gardening.routine_runner import RoutineRunner, RoutineProgress
+from ttr_bot.gardening.routine_runner import RoutineProgress, RoutineRunner
 
 BG = "#0f3460"
 FG = "#eaeaea"
@@ -65,21 +65,27 @@ class GardeningTab:
         flower_row.pack(fill="x", padx=8, pady=(4, 2))
 
         tk.Label(flower_row, text="Bean count:", fg=FG, bg=BG).pack(
-            side="left", padx=(0, 4),
+            side="left",
+            padx=(0, 4),
         )
         self._bean_count_var = tk.IntVar(value=3)
         bean_spin = tk.Spinbox(
             flower_row,
-            from_=1, to=8,
+            from_=1,
+            to=8,
             textvariable=self._bean_count_var,
-            width=4, bg=ENTRY_BG, fg=FG, insertbackground=FG,
+            width=4,
+            bg=ENTRY_BG,
+            fg=FG,
+            insertbackground=FG,
             command=self._on_bean_count_changed,
         )
         bean_spin.pack(side="left", padx=(0, 12))
         bean_spin.bind("<Return>", lambda _: self._on_bean_count_changed())
 
         tk.Label(flower_row, text="Flower:", fg=FG, bg=BG).pack(
-            side="left", padx=(0, 4),
+            side="left",
+            padx=(0, 4),
         )
         self._flower_var = tk.StringVar()
         self._flower_combo = ttk.Combobox(
@@ -89,25 +95,26 @@ class GardeningTab:
             width=20,
         )
         self._flower_combo.pack(side="left")
-        self._flower_combo.bind(
-            "<<ComboboxSelected>>", lambda _: self._on_flower_changed()
-        )
+        self._flower_combo.bind("<<ComboboxSelected>>", lambda _: self._on_flower_changed())
 
         # Recipe display
         recipe_row = tk.Frame(watch_frame, bg=BG)
         recipe_row.pack(fill="x", padx=8, pady=(0, 2))
         tk.Label(recipe_row, text="Recipe:", fg=FG, bg=BG).pack(
-            side="left", padx=(0, 4),
+            side="left",
+            padx=(0, 4),
         )
         self._recipe_canvas = tk.Canvas(
-            recipe_row, height=24, bg=BG, highlightthickness=0,
+            recipe_row,
+            height=24,
+            bg=BG,
+            highlightthickness=0,
         )
         self._recipe_canvas.pack(side="left")
 
         watch_info = tk.Label(
             watch_frame,
-            text="You walk — I garden. Move to each bed and\n"
-                 "I'll auto pick / plant / water.",
+            text="You walk — I garden. Move to each bed and\nI'll auto pick / plant / water.",
             font=("Helvetica", 9),
             fg="#a0a0a0",
             bg=BG,

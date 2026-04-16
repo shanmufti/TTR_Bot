@@ -65,7 +65,7 @@ def build_shadow_mask(frame_bgr: np.ndarray) -> np.ndarray:
         & ((bg_avg - r) >= settings.SHADOW_BLUE_GREEN_BIAS)
         & (brightness > 20)  # reject pure black
     )
-    return (mask.astype(np.uint8) * 255)
+    return mask.astype(np.uint8) * 255
 
 
 def build_relative_shadow_mask(frame_bgr: np.ndarray, water_mask: np.ndarray) -> np.ndarray:

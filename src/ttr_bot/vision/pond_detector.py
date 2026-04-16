@@ -8,8 +8,8 @@ import cv2
 import numpy as np
 
 from ttr_bot.config import settings
-from ttr_bot.vision.color_matcher import build_water_mask
 from ttr_bot.utils.logger import log
+from ttr_bot.vision.color_matcher import build_water_mask
 
 
 class PondArea(NamedTuple):
@@ -53,7 +53,7 @@ def detect_pond(frame_bgr: np.ndarray) -> PondArea:
         log.warning("detect_pond: insufficient water pixels (%d)", water_count)
         return EMPTY_POND
 
-    ch, cw = water_mask.shape
+    _ch, cw = water_mask.shape
 
     row_density = np.count_nonzero(water_mask, axis=1).astype(np.float64)
     row_density = cv2.GaussianBlur(row_density.reshape(-1, 1), (1, 31), 0).flatten()
@@ -67,7 +67,7 @@ def detect_pond(frame_bgr: np.ndarray) -> PondArea:
     ry_top = int(water_rows[0])
     ry_bot = int(water_rows[-1])
 
-    row_slice = water_mask[ry_top:ry_bot + 1, :]
+    row_slice = water_mask[ry_top : ry_bot + 1, :]
     col_density = np.count_nonzero(row_slice, axis=0)
     water_cols = np.where(col_density >= (ry_bot - ry_top) * 0.30)[0]
     if len(water_cols) == 0:
@@ -83,5 +83,7 @@ def detect_pond(frame_bgr: np.ndarray) -> PondArea:
     ph = min(h - py, (ry_bot - ry_top) + 2 * pad)
 
     pond = PondArea(px, py, pw, ph)
-    log.debug("detect_pond: %s  (%d water px, dense rows %d-%d)", pond, water_count, ry_top, ry_bot)
+    log.debug(
+        "detect_pond: %s  (%d water px, dense rows %d-%d)", pond, water_count, ry_top, ry_bot
+    )
     return pond

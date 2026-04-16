@@ -25,4 +25,12 @@ packages = ["src/ttr_bot"]
 ttr-bot = "ttr_bot.__main__:main"
 
 [dependency-groups]
-dev = []
+dev = ["ruff>=0.4", "pytest>=8.0", "ty>=0.0.27"]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 99
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+ignore = ["RUF001", "RUF002", "RUF003", "SIM105"]

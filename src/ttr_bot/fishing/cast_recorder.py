@@ -10,25 +10,23 @@ from __future__ import annotations
 import json
 import math
 import os
-import time
 import threading
-from dataclasses import dataclass, field, asdict
-from typing import Callable
+import time
+from collections.abc import Callable
+from dataclasses import asdict, dataclass
 
-import cv2
 import numpy as np
 import pyautogui
 
-from ttr_bot.config import settings
+from ttr_bot.core.cast_calibration import detect_bobber
 from ttr_bot.core.screen_capture import capture_window
 from ttr_bot.core.window_manager import WindowInfo, find_ttr_window
-from ttr_bot.core.cast_calibration import detect_bobber
-from ttr_bot.vision.template_matcher import find_template
-from ttr_bot.vision.pond_detector import PondArea, detect_pond
-from ttr_bot.vision.color_matcher import build_water_mask, average_water_brightness
-from ttr_bot.vision.fish_detector import detect_fish_shadows, FishCandidate
-from ttr_bot.utils.logger import log
 from ttr_bot.utils import debug_frames as dbg
+from ttr_bot.utils.logger import log
+from ttr_bot.vision.color_matcher import average_water_brightness, build_water_mask
+from ttr_bot.vision.fish_detector import FishCandidate, detect_fish_shadows
+from ttr_bot.vision.pond_detector import PondArea, detect_pond
+from ttr_bot.vision.template_matcher import find_template
 
 _PARAMS_FILE = os.path.join(
     os.path.dirname(os.path.dirname(__file__)), "config", "cast_params.json"
@@ -75,10 +73,13 @@ class CastParams:
                 aim_base_right=data.get("aim_base_right"),
                 aim_offset=data.get("aim_offset"),
             )
-            log.info("Cast params loaded: power=%.2f aim_left=%.2f aim_right=%.2f offset=%.1f",
-                     params.power_base, params.aim_base,
-                     params.aim_base_right or params.aim_base,
-                     params.aim_offset or 0.0)
+            log.info(
+                "Cast params loaded: power=%.2f aim_left=%.2f aim_right=%.2f offset=%.1f",
+                params.power_base,
+                params.aim_base,
+                params.aim_base_right or params.aim_base,
+                params.aim_offset or 0.0,
+            )
             return params
         except Exception:
             log.exception("Failed to load cast params")
@@ -123,7 +124,7 @@ class CastRecorder:
 
     def _loop(self) -> None:
         from ttr_bot.core.window_manager import set_calibrated_bounds
-        from ttr_bot.vision.template_matcher import clear_cache, calibrate_scale
+        from ttr_bot.vision.template_matcher import calibrate_scale, clear_cache
 
         dbg._reset_session()
 
@@ -132,8 +133,9 @@ class CastRecorder:
             self._status("TTR window not found")
             return
 
-        set_calibrated_bounds(win.x, win.y, win.width, win.height,
-                              window_id=win.window_id, pid=win.pid)
+        set_calibrated_bounds(
+            win.x, win.y, win.width, win.height, window_id=win.window_id, pid=win.pid
+        )
 
         frame = capture_window(win)
         if frame is None:
@@ -151,7 +153,7 @@ class CastRecorder:
             self._status("No pond detected")
             return
 
-        crop = frame[pond.y:pond.y + pond.height, pond.x:pond.x + pond.width]
+        crop = frame[pond.y : pond.y + pond.height, pond.x : pond.x + pond.width]
         wm = build_water_mask(crop)
         avg_bright = average_water_brightness(crop, wm)
 
@@ -166,7 +168,10 @@ class CastRecorder:
         self._status(f"Stopped — {len(self.samples)} casts recorded")
 
     def _wait_for_cast_start(
-        self, win: WindowInfo, pond: PondArea, avg_bright: int,
+        self,
+        win: WindowInfo,
+        pond: PondArea,
+        avg_bright: int,
     ) -> tuple | None:
         """Poll until the user initiates a cast (button disappears).
 
@@ -212,7 +217,8 @@ class CastRecorder:
 
     @staticmethod
     def _compute_drag(
-        origin: tuple[int, int], buf: list[tuple[int, int]],
+        origin: tuple[int, int],
+        buf: list[tuple[int, int]],
     ) -> tuple[int, int]:
         """Find the drag endpoint — the position furthest from origin."""
         if not buf:
@@ -227,7 +233,10 @@ class CastRecorder:
         return best[0] - origin[0], best[1] - origin[1]
 
     def _record_one_cast(
-        self, win: WindowInfo, pond: PondArea, avg_bright: int,
+        self,
+        win: WindowInfo,
+        pond: PondArea,
+        avg_bright: int,
     ) -> CastSample | None:
         """Wait for one complete manual cast cycle and return a sample."""
 
@@ -247,8 +256,12 @@ class CastRecorder:
             return None
 
         bobber = detect_bobber(
-            before_frame, after_frame,
-            pond.x, pond.y, pond.width, pond.height,
+            before_frame,
+            after_frame,
+            pond.x,
+            pond.y,
+            pond.width,
+            pond.height,
             drag_label=f"rec_{len(self.samples)}",
         )
         if bobber is None:
@@ -264,35 +277,75 @@ class CastRecorder:
             return None
 
         nearest = min(shadows, key=lambda s: (s.cx - bx) ** 2 + (s.cy - by) ** 2)
-        log.info("Recorder: bobber=(%d,%d) nearest_shadow=(%d,%d) btn=(%d,%d)",
-                 bx, by, nearest.cx, nearest.cy, btn_pos.x, btn_pos.y)
+        log.info(
+            "Recorder: bobber=(%d,%d) nearest_shadow=(%d,%d) btn=(%d,%d)",
+            bx,
+            by,
+            nearest.cx,
+            nearest.cy,
+            btn_pos.x,
+            btn_pos.y,
+        )
 
         self._save_recording_debug(after_frame, bx, by, nearest, btn_pos)
         self._wait_for_button(win)
 
         return CastSample(
-            button_x=btn_pos.x, button_y=btn_pos.y,
-            target_x=nearest.cx, target_y=nearest.cy,
-            bobber_x=bx, bobber_y=by,
-            drag_dx=drag_dx, drag_dy=drag_dy,
+            button_x=btn_pos.x,
+            button_y=btn_pos.y,
+            target_x=nearest.cx,
+            target_y=nearest.cy,
+            bobber_x=bx,
+            bobber_y=by,
+            drag_dx=drag_dx,
+            drag_dy=drag_dy,
         )
 
     def _save_recording_debug(self, frame, bx, by, nearest, btn_pos) -> None:
         if not dbg.is_enabled():
             return
         anns = [
-            {"type": "circle", "center": (bx, by), "radius": 15,
-             "color": (0, 0, 255), "thickness": 3},
-            {"type": "text", "pos": (bx + 18, by),
-             "text": "bobber", "color": (0, 0, 255), "thickness": 2},
-            {"type": "circle", "center": (nearest.cx, nearest.cy), "radius": 12,
-             "color": (0, 255, 0), "thickness": 2},
-            {"type": "text", "pos": (nearest.cx + 14, nearest.cy - 4),
-             "text": "target", "color": (0, 255, 0), "thickness": 1},
-            {"type": "circle", "center": (btn_pos.x, btn_pos.y), "radius": 10,
-             "color": (0, 0, 255)},
-            {"type": "line", "pt1": (btn_pos.x, btn_pos.y), "pt2": (bx, by),
-             "color": (255, 0, 0), "thickness": 1},
+            {
+                "type": "circle",
+                "center": (bx, by),
+                "radius": 15,
+                "color": (0, 0, 255),
+                "thickness": 3,
+            },
+            {
+                "type": "text",
+                "pos": (bx + 18, by),
+                "text": "bobber",
+                "color": (0, 0, 255),
+                "thickness": 2,
+            },
+            {
+                "type": "circle",
+                "center": (nearest.cx, nearest.cy),
+                "radius": 12,
+                "color": (0, 255, 0),
+                "thickness": 2,
+            },
+            {
+                "type": "text",
+                "pos": (nearest.cx + 14, nearest.cy - 4),
+                "text": "target",
+                "color": (0, 255, 0),
+                "thickness": 1,
+            },
+            {
+                "type": "circle",
+                "center": (btn_pos.x, btn_pos.y),
+                "radius": 10,
+                "color": (0, 0, 255),
+            },
+            {
+                "type": "line",
+                "pt1": (btn_pos.x, btn_pos.y),
+                "pt2": (bx, by),
+                "color": (255, 0, 0),
+                "thickness": 1,
+            },
         ]
         dbg.save(frame, f"rec_cast_{len(self.samples)}", annotations=anns)
 
@@ -316,14 +369,16 @@ def fit_cast_params(samples: list[CastSample]) -> CastParams | None:
            drag_dx = aim_base * sqrt(abs(offset_x)) * sign(offset_x)
     """
     usable = [
-        s for s in samples
-        if math.hypot(s.drag_dx, s.drag_dy) >= _MIN_DRAG_MAGNITUDE
-        and s.drag_dy > 0
+        s
+        for s in samples
+        if math.hypot(s.drag_dx, s.drag_dy) >= _MIN_DRAG_MAGNITUDE and s.drag_dy > 0
     ]
     if len(usable) < 2:
         log.warning(
             "Need 2+ usable samples (drag >= %dpx), have %d of %d",
-            _MIN_DRAG_MAGNITUDE, len(usable), len(samples),
+            _MIN_DRAG_MAGNITUDE,
+            len(usable),
+            len(samples),
         )
         return None
 
@@ -349,17 +404,27 @@ def fit_cast_params(samples: list[CastSample]) -> CastParams | None:
     power_base = float(np.median(power_estimates))
     aim_base = float(np.median(aim_estimates)) if aim_estimates else 3.0
 
-    log.info("Fitted cast params: power_base=%.2f (from %d samples), aim_base=%.2f (from %d samples)",
-             power_base, len(power_estimates), aim_base, len(aim_estimates))
+    log.info(
+        "Fitted cast params: power_base=%.2f (from %d samples), aim_base=%.2f (from %d samples)",
+        power_base,
+        len(power_estimates),
+        aim_base,
+        len(aim_estimates),
+    )
 
     for i, s in enumerate(usable):
         off_x = (s.target_x - s.button_x) / _RETINA_SCALE
         off_y = (s.target_y - s.button_y) / _RETINA_SCALE
-        log.info("  sample %d: offset=(%+.0f,%+.0f) drag=(%+.0f,%+.0f) "
-                 "est_power=%.1f est_aim=%.1f",
-                 i, off_x, off_y, s.drag_dx, s.drag_dy,
-                 abs(s.drag_dy) / max(1, math.sqrt(abs(off_y))) if abs(off_y) > 10 else 0,
-                 abs(s.drag_dx) / max(1, math.sqrt(abs(off_x))) if abs(off_x) > 10 else 0)
+        log.info(
+            "  sample %d: offset=(%+.0f,%+.0f) drag=(%+.0f,%+.0f) est_power=%.1f est_aim=%.1f",
+            i,
+            off_x,
+            off_y,
+            s.drag_dx,
+            s.drag_dy,
+            abs(s.drag_dy) / max(1, math.sqrt(abs(off_y))) if abs(off_y) > 10 else 0,
+            abs(s.drag_dx) / max(1, math.sqrt(abs(off_x))) if abs(off_x) > 10 else 0,
+        )
 
     params = CastParams(power_base=round(power_base, 2), aim_base=round(aim_base, 2))
     params.save()

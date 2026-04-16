@@ -6,10 +6,10 @@ cast button visible.  No sell trips, no walking — just fishing.
 
 from __future__ import annotations
 
-import time
 import threading
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 import cv2
 import numpy as np
@@ -17,13 +17,13 @@ import numpy as np
 from ttr_bot.config import settings
 from ttr_bot.core import input_controller as inp
 from ttr_bot.core.screen_capture import capture_window
-from ttr_bot.core.window_manager import find_ttr_window, is_window_available, WindowInfo
-from ttr_bot.vision.color_matcher import build_water_mask, average_water_brightness
-from ttr_bot.vision.pond_detector import detect_pond, PondArea
-from ttr_bot.vision.fish_detector import find_best_fish, detect_fish_shadows
-from ttr_bot.vision.template_matcher import find_template
+from ttr_bot.core.window_manager import WindowInfo, find_ttr_window, is_window_available
 from ttr_bot.utils import debug_frames as dbg
 from ttr_bot.utils.logger import log
+from ttr_bot.vision.color_matcher import average_water_brightness, build_water_mask
+from ttr_bot.vision.fish_detector import detect_fish_shadows, find_best_fish
+from ttr_bot.vision.pond_detector import PondArea, detect_pond
+from ttr_bot.vision.template_matcher import find_template
 
 
 @dataclass
@@ -181,40 +181,88 @@ class FishingBot:
         inner_x2 = pond.x + pond.width - margin_x
 
         anns: list[dict] = [
-            {"type": "rect",
-             "pt1": (pond.x, pond.y),
-             "pt2": (pond.x + pond.width, pond.y + pond.height),
-             "color": (100, 100, 100), "thickness": 1},
-            {"type": "rect",
-             "pt1": (inner_x1, inner_y1),
-             "pt2": (inner_x2, inner_y2),
-             "color": (0, 200, 200), "thickness": 2},
+            {
+                "type": "rect",
+                "pt1": (pond.x, pond.y),
+                "pt2": (pond.x + pond.width, pond.y + pond.height),
+                "color": (100, 100, 100),
+                "thickness": 1,
+            },
+            {
+                "type": "rect",
+                "pt1": (inner_x1, inner_y1),
+                "pt2": (inner_x2, inner_y2),
+                "color": (0, 200, 200),
+                "thickness": 2,
+            },
         ]
         for c in candidates:
             clr = (0, 255, 255) if c.has_bubbles else (0, 165, 255)
-            anns.append({"type": "circle", "center": (c.cx, c.cy), "radius": 18,
-                         "color": clr, "thickness": 2})
-            anns.append({"type": "text", "pos": (c.cx + 20, c.cy - 6),
-                         "text": f"s={c.score:.2f} {'B' if c.has_bubbles else ''}",
-                         "color": clr, "thickness": 2})
+            anns.append(
+                {
+                    "type": "circle",
+                    "center": (c.cx, c.cy),
+                    "radius": 18,
+                    "color": clr,
+                    "thickness": 2,
+                }
+            )
+            anns.append(
+                {
+                    "type": "text",
+                    "pos": (c.cx + 20, c.cy - 6),
+                    "text": f"s={c.score:.2f} {'B' if c.has_bubbles else ''}",
+                    "color": clr,
+                    "thickness": 2,
+                }
+            )
         if shadow is not None:
-            anns.append({"type": "circle", "center": shadow, "radius": 24,
-                         "color": (0, 255, 0), "thickness": 4})
-            anns.append({"type": "line", "pt1": (btn.x, btn.y), "pt2": shadow,
-                         "color": (0, 255, 0), "thickness": 2})
-        anns.append({"type": "circle", "center": (btn.x, btn.y), "radius": 14,
-                     "color": (0, 0, 255), "thickness": 3})
+            anns.append(
+                {
+                    "type": "circle",
+                    "center": shadow,
+                    "radius": 24,
+                    "color": (0, 255, 0),
+                    "thickness": 4,
+                }
+            )
+            anns.append(
+                {
+                    "type": "line",
+                    "pt1": (btn.x, btn.y),
+                    "pt2": shadow,
+                    "color": (0, 255, 0),
+                    "thickness": 2,
+                }
+            )
+        anns.append(
+            {
+                "type": "circle",
+                "center": (btn.x, btn.y),
+                "radius": 14,
+                "color": (0, 0, 255),
+                "thickness": 3,
+            }
+        )
         dbg.save(frame, "cast_target" if shadow else "no_shadow", annotations=anns)
 
     def _save_bite_debug(self, win: WindowInfo, bite_result: str) -> None:
         """Save a debug frame capturing the bite outcome."""
         bite_frame = capture_window(win)
         if bite_frame is not None:
-            dbg.save(bite_frame, f"bite_{bite_result}", annotations=[
-                {"type": "text", "pos": (20, 40),
-                 "text": f"result={bite_result}  cast#{self.stats.casts}",
-                 "color": (0, 255, 0), "thickness": 2},
-            ])
+            dbg.save(
+                bite_frame,
+                f"bite_{bite_result}",
+                annotations=[
+                    {
+                        "type": "text",
+                        "pos": (20, 40),
+                        "text": f"result={bite_result}  cast#{self.stats.casts}",
+                        "color": (0, 255, 0),
+                        "thickness": 2,
+                    },
+                ],
+            )
 
     def _one_cast(self, win: WindowInfo, pond: PondArea, avg_water_bright: int) -> str:
         """Execute a single cast cycle.
@@ -240,7 +288,9 @@ class FishingBot:
             frame = fresh
         candidates = detect_fish_shadows(frame, pond, avg_water_bright)
         shadow = find_best_fish(
-            frame, pond, avg_water_bright,
+            frame,
+            pond,
+            avg_water_bright,
             avoid=self._last_miss_target,
         )
 
@@ -311,17 +361,30 @@ class FishingBot:
                 avg_bright = average_water_brightness(crop, water_mask)
                 log.info(
                     "Pond locked: %dx%d at (%d,%d)  water_brightness=%d",
-                    pond.width, pond.height, pond.x, pond.y, avg_bright,
+                    pond.width,
+                    pond.height,
+                    pond.x,
+                    pond.y,
+                    avg_bright,
                 )
-                dbg.save(frame, "pond", annotations=[
-                    {"type": "rect",
-                     "pt1": (pond.x, pond.y),
-                     "pt2": (pond.x + pond.width, pond.y + pond.height),
-                     "color": (0, 255, 0)},
-                    {"type": "text", "pos": (pond.x, pond.y - 10),
-                     "text": f"pond {pond.width}x{pond.height} bright={avg_bright}",
-                     "color": (0, 255, 0)},
-                ])
+                dbg.save(
+                    frame,
+                    "pond",
+                    annotations=[
+                        {
+                            "type": "rect",
+                            "pt1": (pond.x, pond.y),
+                            "pt2": (pond.x + pond.width, pond.y + pond.height),
+                            "color": (0, 255, 0),
+                        },
+                        {
+                            "type": "text",
+                            "pos": (pond.x, pond.y - 10),
+                            "text": f"pond {pond.width}x{pond.height} bright={avg_bright}",
+                            "color": (0, 255, 0),
+                        },
+                    ],
+                )
                 return pond, avg_bright
             time.sleep(0.5)
         return None
@@ -459,8 +522,11 @@ class FishingBot:
         self._running = False
         log.info(
             "Fishing ended: %s (casts=%d caught=%d missed=%d skipped=%d)",
-            reason, self.stats.casts, self.stats.caught,
-            self.stats.missed, self.stats.skipped,
+            reason,
+            self.stats.casts,
+            self.stats.caught,
+            self.stats.missed,
+            self.stats.skipped,
         )
         if self.on_fishing_ended:
             try:

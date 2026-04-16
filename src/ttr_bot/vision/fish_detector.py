@@ -13,9 +13,9 @@ import cv2
 import numpy as np
 
 from ttr_bot.config import settings
+from ttr_bot.utils.logger import log
 from ttr_bot.vision.color_matcher import build_water_mask
 from ttr_bot.vision.pond_detector import PondArea
-from ttr_bot.utils.logger import log
 
 
 class FishCandidate(NamedTuple):
@@ -32,8 +32,10 @@ _SHADOW_MAX_DIM = 200
 
 _RING_OFFSETS = np.array(
     [
-        (int(settings.SHADOW_WATER_CHECK_RADIUS * math.cos(math.radians(a))),
-         int(settings.SHADOW_WATER_CHECK_RADIUS * math.sin(math.radians(a))))
+        (
+            int(settings.SHADOW_WATER_CHECK_RADIUS * math.cos(math.radians(a))),
+            int(settings.SHADOW_WATER_CHECK_RADIUS * math.sin(math.radians(a))),
+        )
         for a in range(0, 360, 30)
     ],
     dtype=np.int32,
@@ -43,10 +45,7 @@ _RING_OFFSETS = np.array(
 def _is_surrounded_by_water(water_mask: np.ndarray, cx: int, cy: int) -> bool:
     h, w = water_mask.shape[:2]
     coords = _RING_OFFSETS + np.array([cx, cy], dtype=np.int32)
-    valid = (
-        (coords[:, 0] >= 0) & (coords[:, 0] < w)
-        & (coords[:, 1] >= 0) & (coords[:, 1] < h)
-    )
+    valid = (coords[:, 0] >= 0) & (coords[:, 0] < w) & (coords[:, 1] >= 0) & (coords[:, 1] < h)
     if not np.any(valid):
         return False
     xs = coords[valid, 0]
@@ -107,7 +106,15 @@ def _filter_blob(
     score = min(1.0, fill * (area / 500.0))
     log.info(
         "  shadow candidate: (%d,%d) area=%d %dx%d aspect=%.1f fill=%.2f score=%.2f bubbles=%s",
-        frame_cx, frame_cy, area, bw, bh, aspect, fill, score, bubbles,
+        frame_cx,
+        frame_cy,
+        area,
+        bw,
+        bh,
+        aspect,
+        fill,
+        score,
+        bubbles,
     )
     return FishCandidate(frame_cx, frame_cy, area, score, bubbles)
 
@@ -154,16 +161,28 @@ def detect_fish_shadows(
     candidates: list[FishCandidate] = [
         c
         for label_id in range(1, num_labels)
-        if (c := _filter_blob(
-            label_id, stats, centroids, water_mask,
-            frame_bgr, inner_x, inner_y, avg_water_bright, rejected,
-        )) is not None
+        if (
+            c := _filter_blob(
+                label_id,
+                stats,
+                centroids,
+                water_mask,
+                frame_bgr,
+                inner_x,
+                inner_y,
+                avg_water_bright,
+                rejected,
+            )
+        )
+        is not None
     ]
 
     candidates.sort(key=lambda c: c.size, reverse=True)
     log.info(
         "detect_fish_shadows: %d candidates, %d labels, rejected: %s",
-        len(candidates), num_labels - 1, rejected,
+        len(candidates),
+        num_labels - 1,
+        rejected,
     )
     return candidates
 

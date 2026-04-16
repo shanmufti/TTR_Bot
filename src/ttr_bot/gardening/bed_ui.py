@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import time
 
-from ttr_bot.vision import template_matcher as tm
 from ttr_bot.utils.logger import log
+from ttr_bot.vision import template_matcher as tm
 
 # Order matters for debugging labels; detection tries each until one matches.
 BED_BUTTON_NAMES = (
@@ -58,17 +58,25 @@ def classify_bed_state(frame) -> str:
     pick = tm.find_template(frame, "pick_flower_button", threshold=_CLASSIFY_THRESHOLD)
     pick_ms = (time.monotonic() - t1) * 1000
     if pick is not None:
-        log.info("  classify: plant=none(%.0fms) pick=%.3f(%.0fms) → pick",
-                 plant_ms, pick.confidence, pick_ms)
+        log.info(
+            "  classify: plant=none(%.0fms) pick=%.3f(%.0fms) → pick",
+            plant_ms,
+            pick.confidence,
+            pick_ms,
+        )
         return "pick"
 
     t2 = time.monotonic()
     remove = tm.find_template(frame, "remove_button", threshold=_CLASSIFY_THRESHOLD)
     remove_ms = (time.monotonic() - t2) * 1000
     if remove is not None:
-        log.info("  classify: plant=none(%.0fms) pick=none(%.0fms) "
-                 "remove=%.3f(%.0fms) → pick",
-                 plant_ms, pick_ms, remove.confidence, remove_ms)
+        log.info(
+            "  classify: plant=none(%.0fms) pick=none(%.0fms) remove=%.3f(%.0fms) → pick",
+            plant_ms,
+            pick_ms,
+            remove.confidence,
+            remove_ms,
+        )
         return "pick"
 
     # If no primary button matched at the strict threshold, check whether the
@@ -81,13 +89,25 @@ def classify_bed_state(frame) -> str:
     if water is not None:
         plant_retry = tm.find_template(frame, "plant_flower_button")
         if plant_retry is not None:
-            log.info("  classify: plant=%.3f(retry) water=%.3f(%.0fms) → plant",
-                     plant_retry.confidence, water.confidence, water_ms)
+            log.info(
+                "  classify: plant=%.3f(retry) water=%.3f(%.0fms) → plant",
+                plant_retry.confidence,
+                water.confidence,
+                water_ms,
+            )
             return "plant"
-        log.info("  classify: all=none water=%.3f(%.0fms) → unknown (sidebar visible)",
-                 water.confidence, water_ms)
+        log.info(
+            "  classify: all=none water=%.3f(%.0fms) → unknown (sidebar visible)",
+            water.confidence,
+            water_ms,
+        )
 
-    log.info("  classify: plant=none(%.0fms) pick=none(%.0fms) "
-             "remove=none(%.0fms) water=none(%.0fms) → unknown",
-             plant_ms, pick_ms, remove_ms, water_ms)
+    log.info(
+        "  classify: plant=none(%.0fms) pick=none(%.0fms) "
+        "remove=none(%.0fms) water=none(%.0fms) → unknown",
+        plant_ms,
+        pick_ms,
+        remove_ms,
+        water_ms,
+    )
     return "unknown"

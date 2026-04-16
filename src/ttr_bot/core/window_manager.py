@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import NamedTuple
 
 import Quartz
-from Cocoa import NSRunningApplication, NSApplicationActivateIgnoringOtherApps
+from Cocoa import NSApplicationActivateIgnoringOtherApps, NSRunningApplication
 
 from ttr_bot.config.settings import GAME_WINDOW_TITLE
 from ttr_bot.utils.logger import log
@@ -24,7 +24,10 @@ _calibrated_bounds: dict | None = None
 
 
 def set_calibrated_bounds(
-    x: int, y: int, width: int, height: int,
+    x: int,
+    y: int,
+    width: int,
+    height: int,
     window_id: int | None = None,
     pid: int | None = None,
 ) -> None:
@@ -36,11 +39,22 @@ def set_calibrated_bounds(
     """
     global _calibrated_bounds
     _calibrated_bounds = {
-        "x": x, "y": y, "width": width, "height": height,
-        "window_id": window_id, "pid": pid,
+        "x": x,
+        "y": y,
+        "width": width,
+        "height": height,
+        "window_id": window_id,
+        "pid": pid,
     }
-    log.info("Window bounds locked: %dx%d at (%d,%d)  wid=%s pid=%s",
-             width, height, x, y, window_id, pid)
+    log.info(
+        "Window bounds locked: %dx%d at (%d,%d)  wid=%s pid=%s",
+        width,
+        height,
+        x,
+        y,
+        window_id,
+        pid,
+    )
 
 
 def clear_calibrated_bounds() -> None:
@@ -77,7 +91,8 @@ def find_ttr_window() -> WindowInfo | None:
 
         if _calibrated_bounds:
             info = WindowInfo(
-                window_id=wid, pid=pid,
+                window_id=wid,
+                pid=pid,
                 x=_calibrated_bounds["x"],
                 y=_calibrated_bounds["y"],
                 width=_calibrated_bounds["width"],
@@ -85,7 +100,8 @@ def find_ttr_window() -> WindowInfo | None:
             )
         else:
             info = WindowInfo(
-                window_id=wid, pid=pid,
+                window_id=wid,
+                pid=pid,
                 x=int(bounds.get("X", 0)),
                 y=int(bounds.get("Y", 0)),
                 width=int(bounds.get("Width", 0)),
@@ -123,6 +139,7 @@ def focus_window() -> bool:
 
     # Fallback: iterate all running apps by PID
     from AppKit import NSWorkspace
+
     for app in NSWorkspace.sharedWorkspace().runningApplications():
         if app.processIdentifier() == info.pid:
             app.activateWithOptions_(NSApplicationActivateIgnoringOtherApps)

@@ -17,8 +17,8 @@ from ttr_bot.utils.logger import log
 
 
 class MatchResult(NamedTuple):
-    x: int          # center x of the match (window-relative)
-    y: int          # center y of the match (window-relative)
+    x: int  # center x of the match (window-relative)
+    y: int  # center y of the match (window-relative)
     confidence: float
     width: int
     height: int
@@ -86,9 +86,7 @@ _CALIBRATION_ANCHORS = [
 ]
 
 
-def _match_at_scale(
-    frame_bgr: np.ndarray, tmpl: np.ndarray, scale: float
-) -> float:
+def _match_at_scale(frame_bgr: np.ndarray, tmpl: np.ndarray, scale: float) -> float:
     """Return the match confidence of *tmpl* at *scale* against *frame_bgr*."""
     fh, fw = frame_bgr.shape[:2]
     th, tw = tmpl.shape[:2]
@@ -137,9 +135,13 @@ def calibrate_scale(frame_bgr: np.ndarray) -> float:
                 anchor_best = val
                 anchor_scale = scale
 
-        log.info("calibrate coarse: %-24s best=%.3f @ scale=%.2f (%.0fms)",
-                 anchor, anchor_best, anchor_scale,
-                 (time.monotonic() - t_anchor) * 1000)
+        log.info(
+            "calibrate coarse: %-24s best=%.3f @ scale=%.2f (%.0fms)",
+            anchor,
+            anchor_best,
+            anchor_scale,
+            (time.monotonic() - t_anchor) * 1000,
+        )
 
         if anchor_best > overall_best_val:
             overall_best_val = anchor_best
@@ -176,7 +178,8 @@ def calibrate_scale(frame_bgr: np.ndarray) -> float:
         log.warning(
             "calibrate_scale FAILED: best conf=%.3f (need %.2f). "
             "Recapture HUD with tools/snapshot_game_state.py --promote-template",
-            overall_best_val, _MIN_CALIBRATION_CONF_RELAXED,
+            overall_best_val,
+            _MIN_CALIBRATION_CONF_RELAXED,
         )
         _global_scale = None
         return -1.0
@@ -186,12 +189,18 @@ def calibrate_scale(frame_bgr: np.ndarray) -> float:
     if overall_best_val < _MIN_CALIBRATION_CONF:
         log.warning(
             "calibrate_scale: relaxed accept anchor=%s scale=%.2f (conf=%.3f) %.0fms",
-            best_anchor, overall_best_scale, overall_best_val, cal_ms,
+            best_anchor,
+            overall_best_scale,
+            overall_best_val,
+            cal_ms,
         )
     else:
         log.info(
             "calibrate_scale: anchor=%s scale=%.2f (conf=%.3f) — locked (%.0fms)",
-            best_anchor, overall_best_scale, overall_best_val, cal_ms,
+            best_anchor,
+            overall_best_scale,
+            overall_best_val,
+            cal_ms,
         )
     return overall_best_scale
 
@@ -258,8 +267,7 @@ def _get_small_frame(frame_bgr: np.ndarray) -> np.ndarray:
         return _downsampled_frame_cache[1]
     small = cv2.resize(
         frame_bgr,
-        (frame_bgr.shape[1] // _downsample_factor,
-         frame_bgr.shape[0] // _downsample_factor),
+        (frame_bgr.shape[1] // _downsample_factor, frame_bgr.shape[0] // _downsample_factor),
         interpolation=cv2.INTER_AREA,
     )
     _downsampled_frame_cache = (fid, small)
@@ -316,16 +324,29 @@ def find_template(
             cx = (max_loc[0] + tw_ds // 2) * ds
             cy = (max_loc[1] + th_ds // 2) * ds
             total_ms = (time.monotonic() - t_start) * 1000
-            log.debug("[TM] %-28s HIT  offset=%.2f conf=%.3f  "
-                      "cv=%.0fms scales=%d total=%.0fms frame=%dx%d",
-                      template_name, offset, max_val,
-                      cv_ms, scales_tried, total_ms, fw, fh)
-            return MatchResult(cx, cy, float(max_val),
-                               tmpl.shape[1], tmpl.shape[0])
+            log.debug(
+                "[TM] %-28s HIT  offset=%.2f conf=%.3f  "
+                "cv=%.0fms scales=%d total=%.0fms frame=%dx%d",
+                template_name,
+                offset,
+                max_val,
+                cv_ms,
+                scales_tried,
+                total_ms,
+                fw,
+                fh,
+            )
+            return MatchResult(cx, cy, float(max_val), tmpl.shape[1], tmpl.shape[0])
 
     total_ms = (time.monotonic() - t_start) * 1000
-    log.debug("[TM] %-28s MISS scales=%d total=%.0fms frame=%dx%d",
-              template_name, scales_tried, total_ms, fw, fh)
+    log.debug(
+        "[TM] %-28s MISS scales=%d total=%.0fms frame=%dx%d",
+        template_name,
+        scales_tried,
+        total_ms,
+        fw,
+        fh,
+    )
     return None
 
 
@@ -348,7 +369,7 @@ def find_all_templates(
     locations = np.where(result >= threshold)
 
     matches: list[MatchResult] = []
-    for pt_y, pt_x in zip(*locations):
+    for pt_y, pt_x in zip(*locations, strict=False):
         cx = int(pt_x) + tw // 2
         cy = int(pt_y) + th // 2
         conf = float(result[pt_y, pt_x])

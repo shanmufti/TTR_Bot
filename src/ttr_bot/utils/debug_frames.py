@@ -89,8 +89,13 @@ def save(
             cv2.rectangle(out, ann["pt1"], ann["pt2"], color, thickness)
         elif t == "text":
             cv2.putText(
-                out, ann["text"], ann["pos"],
-                cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, thickness,
+                out,
+                ann["text"],
+                ann["pos"],
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                color,
+                thickness,
             )
         elif t == "line":
             cv2.line(out, ann["pt1"], ann["pt2"], color, thickness)

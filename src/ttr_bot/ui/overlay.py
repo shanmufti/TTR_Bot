@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import tkinter as tk
+
 from ttr_bot.fishing.fishing_bot import FishingStats
 
 
@@ -22,14 +23,20 @@ class OverlayWindow:
         self._root.bind("<B1-Motion>", self._do_move)
 
         header = tk.Label(
-            self._root, text="TTR Fishing Bot", font=("Helvetica", 13, "bold"),
-            fg="#e94560", bg="#1a1a2e",
+            self._root,
+            text="TTR Fishing Bot",
+            font=("Helvetica", 13, "bold"),
+            fg="#e94560",
+            bg="#1a1a2e",
         )
         header.pack(pady=(8, 2))
 
         self._status_label = tk.Label(
-            self._root, text="Idle", font=("Helvetica", 11),
-            fg="#eaeaea", bg="#1a1a2e",
+            self._root,
+            text="Idle",
+            font=("Helvetica", 11),
+            fg="#eaeaea",
+            bg="#1a1a2e",
         )
         self._status_label.pack()
 
@@ -44,12 +51,20 @@ class OverlayWindow:
 
     def _stat_row(self, parent: tk.Frame, label_text: str, value: str, row: int) -> tk.Label:
         tk.Label(
-            parent, text=label_text, font=("Helvetica", 10),
-            fg="#a0a0a0", bg="#1a1a2e", anchor="w",
+            parent,
+            text=label_text,
+            font=("Helvetica", 10),
+            fg="#a0a0a0",
+            bg="#1a1a2e",
+            anchor="w",
         ).grid(row=row, column=0, sticky="w")
         val = tk.Label(
-            parent, text=value, font=("Helvetica", 10, "bold"),
-            fg="#ffffff", bg="#1a1a2e", anchor="e",
+            parent,
+            text=value,
+            font=("Helvetica", 10, "bold"),
+            fg="#ffffff",
+            bg="#1a1a2e",
+            anchor="e",
         )
         val.grid(row=row, column=1, sticky="e", padx=(10, 0))
         parent.columnconfigure(1, weight=1)

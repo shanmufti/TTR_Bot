@@ -13,10 +13,10 @@ the next bed.
 from __future__ import annotations
 
 import os
-import time
 import threading
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 import cv2
 
@@ -98,8 +98,11 @@ class GardenWatcher:
             if frame is None:
                 polls_since_log += 1
                 if polls_since_log >= _HEARTBEAT_POLLS:
-                    log.info("[Watcher] polling… (no window) [%d polls, %.1fs since last bed]",
-                             polls_since_log, time.monotonic() - t_between)
+                    log.info(
+                        "[Watcher] polling… (no window) [%d polls, %.1fs since last bed]",
+                        polls_since_log,
+                        time.monotonic() - t_between,
+                    )
                     polls_since_log = 0
                 time.sleep(_POLL_INTERVAL_S)
                 continue
@@ -112,10 +115,16 @@ class GardenWatcher:
             if state not in ("pick", "plant"):
                 polls_since_log += 1
                 if polls_since_log >= _HEARTBEAT_POLLS:
-                    log.info("[Watcher] polling… state=%s [%d polls, grab=%.0fms "
-                             "classify=%.0fms poll=%.0fms, %.1fs since last bed]",
-                             state, polls_since_log, grab_ms, cls_ms, poll_ms,
-                             time.monotonic() - t_between)
+                    log.info(
+                        "[Watcher] polling… state=%s [%d polls, grab=%.0fms "
+                        "classify=%.0fms poll=%.0fms, %.1fs since last bed]",
+                        state,
+                        polls_since_log,
+                        grab_ms,
+                        cls_ms,
+                        poll_ms,
+                        time.monotonic() - t_between,
+                    )
                     polls_since_log = 0
                 time.sleep(_POLL_INTERVAL_S)
                 continue
@@ -125,10 +134,8 @@ class GardenWatcher:
             result.beds_actioned += 1
             bed_num = result.beds_actioned
 
-            log.info("[Timing] bed_transition=%.0fms (polls until detection)",
-                     between_ms)
-            log.info("[Timing] classify=%.0fms grab=%.0fms → %s",
-                     cls_ms, grab_ms, state)
+            log.info("[Timing] bed_transition=%.0fms (polls until detection)", between_ms)
+            log.info("[Timing] classify=%.0fms grab=%.0fms → %s", cls_ms, grab_ms, state)
             self._debug_save(frame, state, bed_num)
             self._status(f"Bed #{bed_num}: {state}")
 
@@ -159,8 +166,10 @@ class GardenWatcher:
             else:
                 state = classify_bed_state(frame)
                 if state == "plant":
-                    log.info("[Watcher] new bed detected (plant) after %.0fms",
-                             (time.monotonic() - t0) * 1000)
+                    log.info(
+                        "[Watcher] new bed detected (plant) after %.0fms",
+                        (time.monotonic() - t0) * 1000,
+                    )
                     return
                 if state == "unknown":
                     unknown_streak += 1
@@ -168,8 +177,7 @@ class GardenWatcher:
                     unknown_streak = 0
 
             if unknown_streak >= 3:
-                log.info("[Watcher] bed UI gone after %.0fms",
-                         (time.monotonic() - t0) * 1000)
+                log.info("[Watcher] bed UI gone after %.0fms", (time.monotonic() - t0) * 1000)
                 return
 
             time.sleep(_POLL_INTERVAL_S)
@@ -199,8 +207,10 @@ class GardenWatcher:
                 result.beds_picked += 1
                 t_gap = time.monotonic()
                 time.sleep(1.0)
-                log.info("[Timing] pick_to_plant_gap=%.0fms (sleep 1.0s)",
-                         (time.monotonic() - t_gap) * 1000)
+                log.info(
+                    "[Timing] pick_to_plant_gap=%.0fms (sleep 1.0s)",
+                    (time.monotonic() - t_gap) * 1000,
+                )
                 if self._bot._plant_flower_no_pick(flower_name, bean_sequence):
                     result.beds_planted += 1
         elif state == "plant":
@@ -213,8 +223,15 @@ class GardenWatcher:
         self._debug_seq += 1
         path = os.path.join(_DEBUG_DIR, f"{self._debug_seq:03d}_bed{bed_num}_{state}.png")
         debug_frame = frame.copy()
-        cv2.putText(debug_frame, f"BED #{bed_num}: {state}", (20, 40),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 255), 3)
+        cv2.putText(
+            debug_frame,
+            f"BED #{bed_num}: {state}",
+            (20, 40),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            1.2,
+            (0, 255, 255),
+            3,
+        )
         cv2.imwrite(path, debug_frame)
         log.info("[Timing] debug_save=%.0fms", (time.monotonic() - t0) * 1000)
 

@@ -2,15 +2,20 @@
 """Diagnose fish shadow detection: capture frames, show what the vision sees."""
 
 import time
+
 import cv2
 import numpy as np
 
-from ttr_bot.core.window_manager import find_ttr_window
-from ttr_bot.core.screen_capture import capture_window
-from ttr_bot.vision.pond_detector import detect_pond
-from ttr_bot.vision.color_matcher import build_water_mask, build_relative_shadow_mask, average_water_brightness
-from ttr_bot.vision.fish_detector import detect_fish_shadows, find_best_fish, find_best_moving_fish
 from ttr_bot.config import settings
+from ttr_bot.core.screen_capture import capture_window
+from ttr_bot.core.window_manager import find_ttr_window
+from ttr_bot.vision.color_matcher import (
+    average_water_brightness,
+    build_relative_shadow_mask,
+    build_water_mask,
+)
+from ttr_bot.vision.fish_detector import detect_fish_shadows, find_best_fish, find_best_moving_fish
+from ttr_bot.vision.pond_detector import detect_pond
 
 OUT = f"{settings.DATA_DIR}/_debug"
 
@@ -18,8 +23,9 @@ OUT = f"{settings.DATA_DIR}/_debug"
 def annotate_frame(frame, pond, candidates, best, label):
     out = frame.copy()
 
-    cv2.rectangle(out, (pond.x, pond.y),
-                  (pond.x + pond.width, pond.y + pond.height), (0, 255, 0), 2)
+    cv2.rectangle(
+        out, (pond.x, pond.y), (pond.x + pond.width, pond.y + pond.height), (0, 255, 0), 2
+    )
 
     margin_x = pond.width * 15 // 100
     margin_y = pond.height * 20 // 100
@@ -30,8 +36,15 @@ def annotate_frame(frame, pond, candidates, best, label):
     for c in candidates:
         color = (0, 255, 255) if c.has_bubbles else (0, 165, 255)
         cv2.circle(out, (c.cx, c.cy), 14, color, 2)
-        cv2.putText(out, f"{c.size}px s={c.score:.2f}",
-                    (c.cx + 16, c.cy - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+        cv2.putText(
+            out,
+            f"{c.size}px s={c.score:.2f}",
+            (c.cx + 16, c.cy - 4),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            color,
+            1,
+        )
 
     if best:
         cv2.circle(out, best, 18, (0, 255, 0), 3)
@@ -46,7 +59,7 @@ def save_masks(frame, pond, label):
     margin_y = pond.height * 20 // 100
     ix, iy = pond.x + margin_x, pond.y + margin_y
     iw, ih = pond.width - 2 * margin_x, pond.height - 2 * margin_y
-    crop = frame[iy:iy + ih, ix:ix + iw]
+    crop = frame[iy : iy + ih, ix : ix + iw]
 
     water = build_water_mask(crop)
     shadow = build_relative_shadow_mask(crop, water)
@@ -58,12 +71,14 @@ def save_masks(frame, pond, label):
     cv2.imwrite(f"{OUT}/shadow_{label}_shadow_mask.png", shadow)
     cv2.imwrite(f"{OUT}/shadow_{label}_shadow_clean.png", shadow_clean)
     cv2.imwrite(f"{OUT}/shadow_{label}_crop.png", crop)
-    print(f"  Water pixels: {np.count_nonzero(water)} / {water.size} ({100*np.count_nonzero(water)/water.size:.1f}%)")
+    water_pct = 100 * np.count_nonzero(water) / water.size
+    print(f"  Water pixels: {np.count_nonzero(water)} / {water.size} ({water_pct:.1f}%)")
     print(f"  Shadow pixels: {np.count_nonzero(shadow_clean)} / {shadow_clean.size}")
 
 
 def main():
     import os
+
     os.makedirs(OUT, exist_ok=True)
 
     win = find_ttr_window()
@@ -86,7 +101,7 @@ def main():
         print("No pond detected!")
         return
 
-    crop = f1[pond.y:pond.y + pond.height, pond.x:pond.x + pond.width]
+    crop = f1[pond.y : pond.y + pond.height, pond.x : pond.x + pond.width]
     wm = build_water_mask(crop)
     avg_bright = average_water_brightness(crop, wm)
     print(f"Water brightness: {avg_bright}")
@@ -128,12 +143,18 @@ def main():
             dx = closest.cx - s1.cx
             dy = closest.cy - s1.cy
             moved = abs(dx) > 10 or abs(dy) > 10
-            print(f"  Shadow {i}: ({s1.cx},{s1.cy}) → ({closest.cx},{closest.cy}) delta=({dx:+d},{dy:+d}) {'MOVED' if moved else 'STATIC'}")
+            state = "MOVED" if moved else "STATIC"
+            print(
+                f"  Shadow {i}: ({s1.cx},{s1.cy}) -> ({closest.cx},{closest.cy})"
+                f" delta=({dx:+d},{dy:+d}) {state}"
+            )
 
     # Test the combined motion-based best-fish picker
     print("\n--- Motion-based best fish (new method) ---")
+
     def _cap():
         return capture_window(win)
+
     best_moving = find_best_moving_fish(_cap, pond, avg_bright)
     if best_moving:
         print(f"  Best moving fish: {best_moving}")

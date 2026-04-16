@@ -8,9 +8,9 @@ using color detection, crops it, and saves as the new template.
 import cv2
 import numpy as np
 
-from ttr_bot.core.window_manager import find_ttr_window
-from ttr_bot.core.screen_capture import capture_window
 from ttr_bot.config import settings
+from ttr_bot.core.screen_capture import capture_window
+from ttr_bot.core.window_manager import find_ttr_window
 
 
 def main() -> None:

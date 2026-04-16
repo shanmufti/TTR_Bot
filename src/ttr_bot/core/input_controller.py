@@ -29,8 +29,10 @@ def _to_screen(win: WindowInfo, wx: int, wy: int) -> tuple[int, int]:
 
 
 def _execute_drag(
-    start_sx: int, start_sy: int,
-    end_sx: int, end_sy: int,
+    start_sx: int,
+    start_sy: int,
+    end_sx: int,
+    end_sy: int,
 ) -> None:
     """Shared mouseDown → moveTo → mouseUp drag sequence."""
     pyautogui.moveTo(start_sx, start_sy)
@@ -85,8 +87,15 @@ def fishing_cast_raw(
     btn_sx, btn_sy = _to_screen(win, button_x, button_y)
     end_sx = btn_sx + drag_dx
     end_sy = btn_sy + drag_dy
-    log.info("fishing_cast_raw: (%d,%d)→(%d,%d) drag=(%+d,%+d)",
-             btn_sx, btn_sy, end_sx, end_sy, drag_dx, drag_dy)
+    log.info(
+        "fishing_cast_raw: (%d,%d)→(%d,%d) drag=(%+d,%+d)",
+        btn_sx,
+        btn_sy,
+        end_sx,
+        end_sy,
+        drag_dx,
+        drag_dy,
+    )
     _execute_drag(btn_sx, btn_sy, end_sx, end_sy)
 
 
@@ -105,6 +114,7 @@ def reload_cast_params() -> None:
     """Load fitted cast params from disk, falling back to defaults."""
     global _power_base, _aim_base_left, _aim_base_right, _aim_offset
     from ttr_bot.fishing.cast_recorder import CastParams
+
     params = CastParams.load()
     if params is not None:
         _power_base = params.power_base
@@ -116,8 +126,13 @@ def reload_cast_params() -> None:
         _aim_base_left = _DEFAULT_AIM_BASE
         _aim_base_right = _DEFAULT_AIM_BASE
         _aim_offset = 0.0
-    log.info("Cast params: power=%.2f aim_left=%.2f aim_right=%.2f offset=%.1f",
-             _power_base, _aim_base_left, _aim_base_right, _aim_offset)
+    log.info(
+        "Cast params: power=%.2f aim_left=%.2f aim_right=%.2f offset=%.1f",
+        _power_base,
+        _aim_base_left,
+        _aim_base_right,
+        _aim_offset,
+    )
 
 
 def fishing_cast_at(
@@ -157,17 +172,22 @@ def fishing_cast_at(
 
     dx_sq = drag_dx * drag_dx
     mag_sq = desired_mag * desired_mag
-    if mag_sq > dx_sq:
-        drag_dy = int(math.sqrt(mag_sq - dx_sq))
-    else:
-        drag_dy = _MIN_POWER
+    drag_dy = int(math.sqrt(mag_sq - dx_sq)) if mag_sq > dx_sq else _MIN_POWER
 
     end_sx = btn_sx + drag_dx
     end_sy = btn_sy + drag_dy
 
     log.info(
-        "fishing_cast_at: offset_scr=(%+.0f,%+.0f) → drag=(%+d,+%d) mag=%.0f screen(%d,%d)→(%d,%d)",
-        offset_x, offset_y, drag_dx, drag_dy, desired_mag, btn_sx, btn_sy, end_sx, end_sy,
+        "fishing_cast_at: offset_scr=(%+.0f,%+.0f) drag=(%+d,+%d) mag=%.0f screen(%d,%d)->(%d,%d)",
+        offset_x,
+        offset_y,
+        drag_dx,
+        drag_dy,
+        desired_mag,
+        btn_sx,
+        btn_sy,
+        end_sx,
+        end_sy,
     )
     _execute_drag(btn_sx, btn_sy, end_sx, end_sy)
 

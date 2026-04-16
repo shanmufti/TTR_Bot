@@ -5,16 +5,14 @@ red fishing button at a range of scales, report the best match for each."""
 import cv2
 import numpy as np
 
-from ttr_bot.core.window_manager import find_ttr_window
-from ttr_bot.core.screen_capture import capture_window
-from ttr_bot.vision.template_matcher import _load_template, _CALIBRATION_ANCHORS
 from ttr_bot.config import settings
+from ttr_bot.core.screen_capture import capture_window
+from ttr_bot.core.window_manager import find_ttr_window
+from ttr_bot.vision.template_matcher import _CALIBRATION_ANCHORS, _load_template
 
 SCALES = np.arange(0.5, 1.6, 0.1)
 
-TEMPLATES_TO_CHECK = list(dict.fromkeys(
-    _CALIBRATION_ANCHORS + ["red_fishing_button"]
-))
+TEMPLATES_TO_CHECK = list(dict.fromkeys([*_CALIBRATION_ANCHORS, "red_fishing_button"]))
 
 
 def main() -> None:
@@ -58,7 +56,9 @@ def main() -> None:
                 best_size = (new_w, new_h)
 
         status = "OK" if best_val >= 0.65 else "LOW" if best_val >= 0.48 else "FAIL"
-        print(f"  {name:30s}  conf={best_val:.3f}  scale={best_scale:.2f}  at={best_loc}  [{status}]")
+        print(
+            f"  {name:30s}  conf={best_val:.3f}  scale={best_scale:.2f}  at={best_loc}  [{status}]"
+        )
 
         if best_val >= 0.48:
             cx = best_loc[0] + best_size[0] // 2
@@ -71,10 +71,18 @@ def main() -> None:
         pt1 = (cx - w // 2, cy - h // 2)
         pt2 = (cx + w // 2, cy + h // 2)
         cv2.rectangle(out, pt1, pt2, color, 2)
-        cv2.putText(out, f"{name} {conf:.2f}", (pt1[0], pt1[1] - 8),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+        cv2.putText(
+            out,
+            f"{name} {conf:.2f}",
+            (pt1[0], pt1[1] - 8),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            color,
+            1,
+        )
 
     import os
+
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     cv2.imwrite(out_path, out)
     print(f"\nAnnotated frame saved: {out_path}")

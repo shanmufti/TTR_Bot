@@ -6,18 +6,18 @@ All clicks go through input_controller.click() which handles Retina scaling.
 
 from __future__ import annotations
 
-import time
 import threading
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 from ttr_bot.config import settings
 from ttr_bot.core import input_controller as inp
 from ttr_bot.core.screen_capture import capture_window
-from ttr_bot.core.window_manager import find_ttr_window, WindowInfo
+from ttr_bot.core.window_manager import WindowInfo, find_ttr_window
 from ttr_bot.gardening.flowers import BEAN_CHAR_TO_TEMPLATE
-from ttr_bot.vision.template_matcher import find_template, is_element_visible
 from ttr_bot.utils.logger import log
+from ttr_bot.vision.template_matcher import find_template, is_element_visible
 
 
 @dataclass
@@ -30,12 +30,11 @@ class GardeningStats:
 @dataclass
 class GardenAction:
     """A single gardening action for the bot to execute."""
+
     action: str  # "plant" or "water"
     flower_name: str = ""
     bean_sequence: str = ""
     water_count: int = 1
-
-
 
 
 class GardenBot:
@@ -116,7 +115,9 @@ class GardenBot:
         self._running = True
         self._paused = False
         self._thread = threading.Thread(
-            target=self._run_actions, args=(actions,), daemon=True,
+            target=self._run_actions,
+            args=(actions,),
+            daemon=True,
         )
         self._thread.start()
 
@@ -177,8 +178,11 @@ class GardenBot:
 
         t1 = time.monotonic()
         time.sleep(settings.GARDEN_POST_PICK_DELAY_S)
-        log.info("[Timing] pick_anim_wait=%.0fms (POST_PICK_DELAY=%.2fs)",
-                 (time.monotonic() - t1) * 1000, settings.GARDEN_POST_PICK_DELAY_S)
+        log.info(
+            "[Timing] pick_anim_wait=%.0fms (POST_PICK_DELAY=%.2fs)",
+            (time.monotonic() - t1) * 1000,
+            settings.GARDEN_POST_PICK_DELAY_S,
+        )
         log.info("Picked flower — total %.0fms", (time.monotonic() - t0) * 1000)
         return True
 
@@ -193,7 +197,9 @@ class GardenBot:
         if win is not None:
             frame = capture_window(win)
             if frame is not None and is_element_visible(frame, "pick_flower_button"):
-                self._notify_status(f"Existing flower detected — picking before planting {flower_name}")
+                self._notify_status(
+                    f"Existing flower detected — picking before planting {flower_name}"
+                )
                 if not self._find_and_click("pick_flower_button"):
                     self._notify_status("Pick button not found")
                     return False
@@ -218,8 +224,11 @@ class GardenBot:
 
         t0 = time.monotonic()
         time.sleep(settings.GARDEN_POST_CONFIRM_DELAY_S)
-        log.info("[Timing] post_plant_btn_wait=%.0fms (POST_CONFIRM_DELAY=%.2fs)",
-                 (time.monotonic() - t0) * 1000, settings.GARDEN_POST_CONFIRM_DELAY_S)
+        log.info(
+            "[Timing] post_plant_btn_wait=%.0fms (POST_CONFIRM_DELAY=%.2fs)",
+            (time.monotonic() - t0) * 1000,
+            settings.GARDEN_POST_CONFIRM_DELAY_S,
+        )
 
         # Step 2: Click each jellybean in the recipe.
         # Bean picker buttons don't move while the dialog is open, but the
@@ -243,23 +252,36 @@ class GardenBot:
                 inp.ensure_focused()
                 time.sleep(0.05)
                 inp.click(pos[0], pos[1], window=win)
-                log.info("  Bean %d/%d: %s at (%d,%d) [repeat] %.0fms",
-                         i + 1, len(bean_sequence), template_name,
-                         pos[0], pos[1], (time.monotonic() - t0) * 1000)
+                log.info(
+                    "  Bean %d/%d: %s at (%d,%d) [repeat] %.0fms",
+                    i + 1,
+                    len(bean_sequence),
+                    template_name,
+                    pos[0],
+                    pos[1],
+                    (time.monotonic() - t0) * 1000,
+                )
             else:
                 pos = self._find_and_click(template_name, win=win)
                 if pos is None:
                     self._notify_status(f"Jellybean button not found: {bean_char}")
                     return False
                 bean_positions[template_name] = pos
-                log.info("  Bean %d/%d: %s [found+clicked] %.0fms",
-                         i + 1, len(bean_sequence), template_name,
-                         (time.monotonic() - t0) * 1000)
+                log.info(
+                    "  Bean %d/%d: %s [found+clicked] %.0fms",
+                    i + 1,
+                    len(bean_sequence),
+                    template_name,
+                    (time.monotonic() - t0) * 1000,
+                )
 
             time.sleep(settings.GARDEN_POST_BEAN_DELAY_S)
 
-        log.info("[Timing] all_beans=%.0fms (%d beans)",
-                 (time.monotonic() - beans_t0) * 1000, len(bean_sequence))
+        log.info(
+            "[Timing] all_beans=%.0fms (%d beans)",
+            (time.monotonic() - beans_t0) * 1000,
+            len(bean_sequence),
+        )
 
         # Step 3: Click "Plant" confirmation button
         t0 = time.monotonic()
@@ -270,8 +292,11 @@ class GardenBot:
 
         t0 = time.monotonic()
         time.sleep(settings.GARDEN_POST_PLANT_DELAY_S)
-        log.info("[Timing] plant_anim_wait=%.0fms (POST_PLANT_DELAY=%.1fs)",
-                 (time.monotonic() - t0) * 1000, settings.GARDEN_POST_PLANT_DELAY_S)
+        log.info(
+            "[Timing] plant_anim_wait=%.0fms (POST_PLANT_DELAY=%.1fs)",
+            (time.monotonic() - t0) * 1000,
+            settings.GARDEN_POST_PLANT_DELAY_S,
+        )
 
         # Step 4: Click "OK" on the result dialog (may not appear on all flowers)
         t0 = time.monotonic()
@@ -284,8 +309,11 @@ class GardenBot:
 
         t0 = time.monotonic()
         time.sleep(settings.GARDEN_POST_CONFIRM_DELAY_S)
-        log.info("[Timing] post_ok_wait=%.0fms (POST_CONFIRM_DELAY=%.2fs)",
-                 (time.monotonic() - t0) * 1000, settings.GARDEN_POST_CONFIRM_DELAY_S)
+        log.info(
+            "[Timing] post_ok_wait=%.0fms (POST_CONFIRM_DELAY=%.2fs)",
+            (time.monotonic() - t0) * 1000,
+            settings.GARDEN_POST_CONFIRM_DELAY_S,
+        )
 
         # Step 5: Water the newly planted flower (if configured)
         if settings.GARDEN_WATERS_AFTER_PLANT > 0:
@@ -311,14 +339,16 @@ class GardenBot:
             if not self._find_and_click("watering_can_button"):
                 self._notify_status("Watering can button not found")
                 return False
-            log.info("  Water %d/%d — click=%.0fms", i + 1, count,
-                     (time.monotonic() - t0) * 1000)
+            log.info("  Water %d/%d — click=%.0fms", i + 1, count, (time.monotonic() - t0) * 1000)
             self.stats.waters_done += 1
             self._notify_stats()
             t0 = time.monotonic()
             time.sleep(settings.GARDEN_POST_WATER_DELAY_S)
-            log.info("[Timing] water_anim_wait=%.0fms (POST_WATER_DELAY=%.2fs)",
-                     (time.monotonic() - t0) * 1000, settings.GARDEN_POST_WATER_DELAY_S)
+            log.info(
+                "[Timing] water_anim_wait=%.0fms (POST_WATER_DELAY=%.2fs)",
+                (time.monotonic() - t0) * 1000,
+                settings.GARDEN_POST_WATER_DELAY_S,
+            )
 
         return True
 
@@ -366,22 +396,29 @@ class GardenBot:
                 time.sleep(0.05)
                 inp.click(match.x, match.y, window=win)
                 total_ms = (time.monotonic() - t_start) * 1000
-                log.info("Clicked %s at (%d,%d) conf=%.2f  "
-                         "(polls=%d cap=%.0fms match=%.0fms total=%.0fms)",
-                         template_name, match.x, match.y, match.confidence,
-                         polls, cap_ms, match_ms, total_ms)
+                log.info(
+                    "Clicked %s at (%d,%d) conf=%.2f  "
+                    "(polls=%d cap=%.0fms match=%.0fms total=%.0fms)",
+                    template_name,
+                    match.x,
+                    match.y,
+                    match.confidence,
+                    polls,
+                    cap_ms,
+                    match_ms,
+                    total_ms,
+                )
                 return (match.x, match.y)
 
             time.sleep(0.2)
 
-        log.warning("Template %s not found within %.1fs (%d polls)",
-                    template_name, timeout, polls)
+        log.warning("Template %s not found within %.1fs (%d polls)", template_name, timeout, polls)
         return None
 
     def _ensure_calibrated(self) -> bool:
         """Verify scale calibration is set, running it if needed."""
-        from ttr_bot.vision import template_matcher as tm
         from ttr_bot.core.window_manager import set_calibrated_bounds
+        from ttr_bot.vision import template_matcher as tm
 
         if tm._global_scale is not None:
             return True
@@ -392,8 +429,9 @@ class GardenBot:
             log.warning("Calibration failed: TTR window not found")
             return False
 
-        set_calibrated_bounds(win.x, win.y, win.width, win.height,
-                              window_id=win.window_id, pid=win.pid)
+        set_calibrated_bounds(
+            win.x, win.y, win.width, win.height, window_id=win.window_id, pid=win.pid
+        )
 
         frame = capture_window(win)
         if frame is None:
@@ -435,7 +473,9 @@ class GardenBot:
         self._running = False
         log.info(
             "Gardening ended: %s  (planted=%d, watered=%d)",
-            reason, self.stats.flowers_planted, self.stats.waters_done,
+            reason,
+            self.stats.flowers_planted,
+            self.stats.waters_done,
         )
         if self.on_gardening_ended:
             try:

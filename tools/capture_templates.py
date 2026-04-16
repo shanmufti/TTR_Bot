@@ -19,9 +19,9 @@ import cv2
 import numpy as np
 from PIL import Image, ImageTk
 
-from ttr_bot.core.window_manager import find_ttr_window
-from ttr_bot.core.screen_capture import capture_window
 from ttr_bot.config.settings import TEMPLATES_DIR
+from ttr_bot.core.screen_capture import capture_window
+from ttr_bot.core.window_manager import find_ttr_window
 
 FISHING_TEMPLATES = [
     ("Red_Fishing_Button.png", "RED FISHING BUTTON (cast button at bottom-center)"),
@@ -101,32 +101,51 @@ class CaptureApp:
         # Header label
         self._header_var = tk.StringVar()
         tk.Label(
-            self._root, textvariable=self._header_var,
-            fg="#ffff00", bg="#222", font=("Helvetica", 13, "bold"),
-            wraplength=700, justify="left",
+            self._root,
+            textvariable=self._header_var,
+            fg="#ffff00",
+            bg="#222",
+            font=("Helvetica", 13, "bold"),
+            wraplength=700,
+            justify="left",
         ).pack(fill="x", padx=10, pady=(8, 0))
 
         # Counter label
         self._counter_var = tk.StringVar()
         tk.Label(
-            self._root, textvariable=self._counter_var,
-            fg="#a0a0a0", bg="#222", font=("Helvetica", 11),
+            self._root,
+            textvariable=self._counter_var,
+            fg="#a0a0a0",
+            bg="#222",
+            font=("Helvetica", 11),
         ).pack(fill="x", padx=10, pady=(0, 4))
 
         # Buttons (macOS native buttons -- use highlightbackground for tint)
         btn_frame = tk.Frame(self._root, bg="#222")
         btn_frame.pack(fill="x", padx=8, pady=6)
         tk.Button(
-            btn_frame, text="✓ Save (Enter)", font=("Helvetica", 13, "bold"),
-            highlightbackground="#1a8f3c", width=14, command=self._on_save,
+            btn_frame,
+            text="✓ Save (Enter)",
+            font=("Helvetica", 13, "bold"),
+            highlightbackground="#1a8f3c",
+            width=14,
+            command=self._on_save,
         ).pack(side="left", padx=(0, 6))
         tk.Button(
-            btn_frame, text="Skip (S)", font=("Helvetica", 13),
-            highlightbackground="#b8860b", width=12, command=self._on_skip,
+            btn_frame,
+            text="Skip (S)",
+            font=("Helvetica", 13),
+            highlightbackground="#b8860b",
+            width=12,
+            command=self._on_skip,
         ).pack(side="left", padx=(0, 6))
         tk.Button(
-            btn_frame, text="Quit (Q)", font=("Helvetica", 13),
-            highlightbackground="#e94560", width=12, command=self._on_quit,
+            btn_frame,
+            text="Quit (Q)",
+            font=("Helvetica", 13),
+            highlightbackground="#e94560",
+            width=12,
+            command=self._on_quit,
         ).pack(side="left")
 
         # Keyboard shortcuts
@@ -136,7 +155,10 @@ class CaptureApp:
 
         # Canvas (placeholder size, updated per task)
         self._canvas = tk.Canvas(
-            self._root, cursor="crosshair", highlightthickness=0, bg="#111",
+            self._root,
+            cursor="crosshair",
+            highlightthickness=0,
+            bg="#111",
         )
         self._canvas.pack(fill="both", expand=True)
         self._canvas.bind("<ButtonPress-1>", self._on_press)
@@ -215,8 +237,12 @@ class CaptureApp:
         if self._rect_id:
             self._canvas.delete(self._rect_id)
         self._rect_id = self._canvas.create_rectangle(
-            self._start[0], self._start[1], event.x, event.y,
-            outline="#00ff00", width=2,
+            self._start[0],
+            self._start[1],
+            event.x,
+            event.y,
+            outline="#00ff00",
+            width=2,
         )
 
     def _on_release(self, event):
@@ -261,6 +287,7 @@ class CaptureApp:
 # ------------------------------------------------------------------
 # Helpers
 # ------------------------------------------------------------------
+
 
 def _capture_frame() -> np.ndarray:
     win = find_ttr_window()
@@ -316,9 +343,7 @@ def main():
             + GOLF_STEP2_SCOREBOARD
             + GOLF_STEP3_TURN_TIMER
         )
-        match = next(
-            ((f, d) for f, d in all_templates if f == single_template), None
-        )
+        match = next(((f, d) for f, d in all_templates if f == single_template), None)
         if match is None:
             print(f"ERROR: Unknown template '{single_template}'")
             print("Available templates:")

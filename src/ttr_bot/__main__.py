@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """TTR Bot – macOS entry point."""
 
-import sys
 import platform
+import sys
 
 from ttr_bot.utils.logger import log
 
@@ -15,6 +15,7 @@ def main() -> None:
     log.info("Starting TTR Bot…")
 
     from ttr_bot.ui.app import App
+
     app = App()
     app.run()
 

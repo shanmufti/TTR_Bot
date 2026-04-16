@@ -54,7 +54,11 @@ def has_bubbles_above(
     found = count >= settings.BUBBLE_MIN_PIXELS
     log.debug(
         "bubble_check at (%d,%d): %d bubble px (threshold=%d, need=%d) -> %s",
-        shadow_cx, shadow_cy, count, bubble_threshold,
-        settings.BUBBLE_MIN_PIXELS, "FOUND" if found else "none",
+        shadow_cx,
+        shadow_cy,
+        count,
+        bubble_threshold,
+        settings.BUBBLE_MIN_PIXELS,
+        "FOUND" if found else "none",
     )
     return found

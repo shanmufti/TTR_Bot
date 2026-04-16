@@ -31,7 +31,9 @@ def get_logger() -> logging.Logger:
 
     console = logging.StreamHandler(sys.stdout)
     console.setLevel(logging.INFO)
-    console.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S"))
+    console.setFormatter(
+        logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S")
+    )
     _logger.addHandler(console)
 
     project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
@@ -42,10 +44,15 @@ def get_logger() -> logging.Logger:
 
     log_file = os.path.join(log_dir, f"ttr_bot_{datetime.now():%Y%m%d_%H%M%S}.log")
     file_handler = RotatingFileHandler(
-        log_file, maxBytes=_MAX_LOG_BYTES, backupCount=3, encoding="utf-8",
+        log_file,
+        maxBytes=_MAX_LOG_BYTES,
+        backupCount=3,
+        encoding="utf-8",
     )
     file_handler.setLevel(logging.DEBUG)
-    file_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s"))
+    file_handler.setFormatter(
+        logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+    )
     _logger.addHandler(file_handler)
 
     return _logger

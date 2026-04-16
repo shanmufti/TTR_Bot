@@ -22,17 +22,17 @@ _CALIBRATION_FILE = os.path.join(
 
 # Drag vectors (screen px) used during calibration casts
 CALIBRATION_DRAGS = [
-    (0, 80),       # short straight
-    (-60, 120),    # medium left
-    (60, 120),     # medium right
+    (0, 80),  # short straight
+    (-60, 120),  # medium left
+    (60, 120),  # medium right
 ]
 
 
 class CalibrationSample(NamedTuple):
-    drag_dx: float    # known drag x (screen px)
-    drag_dy: float    # known drag y (screen px)
-    land_dx: float    # detected bobber x offset from button (retina frame px)
-    land_dy: float    # detected bobber y offset from button (retina frame px)
+    drag_dx: float  # known drag x (screen px)
+    drag_dy: float  # known drag y (screen px)
+    land_dx: float  # detected bobber x offset from button (retina frame px)
+    land_dy: float  # detected bobber y offset from button (retina frame px)
 
 
 def detect_bobber(
@@ -80,20 +80,43 @@ def detect_bobber(
     contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     if dbg.is_enabled():
-        dbg.save(before, f"cal_{drag_label}_before", annotations=[
-            {"type": "rect", "pt1": (x1, y1), "pt2": (x2, y2),
-             "color": (0, 255, 0), "thickness": 1},
-        ])
-        dbg.save(after, f"cal_{drag_label}_after", annotations=[
-            {"type": "rect", "pt1": (x1, y1), "pt2": (x2, y2),
-             "color": (0, 255, 0), "thickness": 1},
-        ])
+        dbg.save(
+            before,
+            f"cal_{drag_label}_before",
+            annotations=[
+                {
+                    "type": "rect",
+                    "pt1": (x1, y1),
+                    "pt2": (x2, y2),
+                    "color": (0, 255, 0),
+                    "thickness": 1,
+                },
+            ],
+        )
+        dbg.save(
+            after,
+            f"cal_{drag_label}_after",
+            annotations=[
+                {
+                    "type": "rect",
+                    "pt1": (x1, y1),
+                    "pt2": (x2, y2),
+                    "color": (0, 255, 0),
+                    "thickness": 1,
+                },
+            ],
+        )
         diff_vis = cv2.cvtColor(thresh, cv2.COLOR_GRAY2BGR)
         full_diff = np.zeros_like(before)
         full_diff[y1:y2, x1:x2] = diff_vis
         diff_anns: list[dict] = [
-            {"type": "rect", "pt1": (x1, y1), "pt2": (x2, y2),
-             "color": (0, 255, 0), "thickness": 1},
+            {
+                "type": "rect",
+                "pt1": (x1, y1),
+                "pt2": (x2, y2),
+                "color": (0, 255, 0),
+                "thickness": 1,
+            },
         ]
         for c in contours:
             area_c = cv2.contourArea(c)
@@ -101,11 +124,18 @@ def detect_bobber(
             if m["m00"] > 0:
                 bx = int(m["m10"] / m["m00"]) + x1
                 by = int(m["m01"] / m["m00"]) + y1
-                diff_anns.append({"type": "circle", "center": (bx, by), "radius": 8,
-                                  "color": (0, 255, 255)})
-                diff_anns.append({"type": "text", "pos": (bx + 10, by),
-                                  "text": f"a={area_c}", "color": (0, 255, 255),
-                                  "thickness": 1})
+                diff_anns.append(
+                    {"type": "circle", "center": (bx, by), "radius": 8, "color": (0, 255, 255)}
+                )
+                diff_anns.append(
+                    {
+                        "type": "text",
+                        "pos": (bx + 10, by),
+                        "text": f"a={area_c}",
+                        "color": (0, 255, 255),
+                        "thickness": 1,
+                    }
+                )
         dbg.save(full_diff, f"cal_{drag_label}_diff", annotations=diff_anns)
 
     if not contours:
@@ -118,8 +148,12 @@ def detect_bobber(
     valid = [c for c in contours if _BOBBER_MIN_AREA <= cv2.contourArea(c) <= _BOBBER_MAX_AREA]
     if not valid:
         areas = sorted([int(cv2.contourArea(c)) for c in contours], reverse=True)[:5]
-        log.warning("detect_bobber: no blobs in area range %d-%d (top areas: %s)",
-                    _BOBBER_MIN_AREA, _BOBBER_MAX_AREA, areas)
+        log.warning(
+            "detect_bobber: no blobs in area range %d-%d (top areas: %s)",
+            _BOBBER_MIN_AREA,
+            _BOBBER_MAX_AREA,
+            areas,
+        )
         return None
 
     best = max(valid, key=cv2.contourArea)
@@ -132,13 +166,26 @@ def detect_bobber(
     cy = int(M["m01"] / M["m00"]) + y1
 
     if dbg.is_enabled():
-        dbg.save(after, f"cal_{drag_label}_landing", annotations=[
-            {"type": "circle", "center": (cx, cy), "radius": 15,
-             "color": (0, 0, 255), "thickness": 3},
-            {"type": "text", "pos": (cx + 18, cy),
-             "text": f"bobber ({cx},{cy}) area={area}",
-             "color": (0, 0, 255), "thickness": 2},
-        ])
+        dbg.save(
+            after,
+            f"cal_{drag_label}_landing",
+            annotations=[
+                {
+                    "type": "circle",
+                    "center": (cx, cy),
+                    "radius": 15,
+                    "color": (0, 0, 255),
+                    "thickness": 3,
+                },
+                {
+                    "type": "text",
+                    "pos": (cx + 18, cy),
+                    "text": f"bobber ({cx},{cy}) area={area}",
+                    "color": (0, 0, 255),
+                    "thickness": 2,
+                },
+            ],
+        )
 
     log.info("detect_bobber: landing at (%d,%d) blob_area=%d", cx, cy, area)
     return cx, cy
@@ -167,7 +214,10 @@ class CastCalibration:
         self._samples.append(sample)
         log.info(
             "Cast cal sample: drag=(%+.0f,%+.0f) → landing_offset=(%+.0f,%+.0f)",
-            sample.drag_dx, sample.drag_dy, sample.land_dx, sample.land_dy,
+            sample.drag_dx,
+            sample.drag_dy,
+            sample.land_dx,
+            sample.land_dy,
         )
 
     @property
@@ -208,7 +258,7 @@ class CastCalibration:
             raise RuntimeError("Cast calibration not fitted")
         offset = np.array([target_dx, target_dy])
         drag = self._matrix @ offset
-        return int(round(drag[0])), int(round(drag[1]))
+        return round(drag[0]), round(drag[1])
 
     def save(self) -> None:
         os.makedirs(os.path.dirname(_CALIBRATION_FILE), exist_ok=True)
@@ -246,10 +296,12 @@ class CastCalibration:
         """
         if self.is_calibrated:
             return
-        self._matrix = np.array([
-            [ 0.3,  0.0],
-            [ 0.0, -0.3],
-        ])
+        self._matrix = np.array(
+            [
+                [0.3, 0.0],
+                [0.0, -0.3],
+            ]
+        )
         log.info("Cast calibration: using default transform (0.3x, Y-flip)")
 
 

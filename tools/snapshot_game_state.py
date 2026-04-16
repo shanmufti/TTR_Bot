@@ -22,7 +22,6 @@ from ttr_bot.config import settings
 from ttr_bot.core.screen_capture import capture_window
 from ttr_bot.core.window_manager import find_ttr_window
 
-
 # Fraction of window from bottom-right corner (book + small margin).
 _BOTTOM_FRAC_H = 0.16
 _RIGHT_FRAC_W = 0.14

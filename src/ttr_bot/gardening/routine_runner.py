@@ -8,8 +8,8 @@ the flower selection, and relays progress / status to the UI.
 from __future__ import annotations
 
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 import pyautogui
 
@@ -114,7 +114,8 @@ class RoutineRunner:
             sweeper.on_status = lambda msg: self._notify_status(msg)
 
             result = sweeper.sweep(
-                flower, beans,
+                flower,
+                beans,
                 target_beds=target_beds,
                 max_laps=max_laps,
             )

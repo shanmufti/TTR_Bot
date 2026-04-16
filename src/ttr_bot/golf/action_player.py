@@ -6,9 +6,9 @@ import json
 import os
 import threading
 import time
-from time import perf_counter
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
+from time import perf_counter
 
 import pyautogui
 
@@ -35,7 +35,7 @@ class GolfActionCommand:
     command: str = ""
 
     @classmethod
-    def from_dict(cls, d: dict) -> "GolfActionCommand":
+    def from_dict(cls, d: dict) -> GolfActionCommand:
         return cls(
             action=str(d.get("Action", d.get("action", ""))),
             duration=int(d.get("Duration", d.get("duration", 0))),
@@ -62,14 +62,16 @@ class GolfShotSummary:
             lines.append(f"Move to the {self.position.upper()} tee position.")
         else:
             lines.append("Stay on the CENTER tee position.")
-        lines.extend([
-            "",
-            "━━━ BOT ━━━",
-            f"Aim: {self.aim}",
-            f"Power: ~{self.power}%",
-            "",
-            f"You have {self.delay_seconds}s after start to focus TTR.",
-        ])
+        lines.extend(
+            [
+                "",
+                "━━━ BOT ━━━",
+                f"Aim: {self.aim}",
+                f"Power: ~{self.power}%",
+                "",
+                f"You have {self.delay_seconds}s after start to focus TTR.",
+            ]
+        )
         return "\n".join(lines)
 
 

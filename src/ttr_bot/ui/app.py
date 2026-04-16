@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-import tkinter as tk
-from tkinter import ttk, scrolledtext
 import logging
+import tkinter as tk
+from tkinter import scrolledtext, ttk
 
 from ttr_bot.config import settings
 from ttr_bot.core.window_manager import is_window_available
-from ttr_bot.fishing.fishing_bot import FishingBot, FishingConfig, FishingStats
 from ttr_bot.fishing.cast_recorder import CastRecorder, fit_cast_params
+from ttr_bot.fishing.fishing_bot import FishingBot, FishingConfig, FishingStats
 from ttr_bot.ui.overlay import OverlayWindow
 from ttr_bot.utils.logger import log
 
@@ -73,14 +73,20 @@ class App:
 
         # ---- Header ----
         tk.Label(
-            root, text="TTR Bot", font=("Helvetica", 18, "bold"),
-            fg=accent, bg=bg,
+            root,
+            text="TTR Bot",
+            font=("Helvetica", 18, "bold"),
+            fg=accent,
+            bg=bg,
         ).pack(pady=(14, 2))
 
         self._status_var = tk.StringVar(value="Checking for TTR window…")
         self._status_label = tk.Label(
-            root, textvariable=self._status_var, font=("Helvetica", 10),
-            fg="#a0a0a0", bg=bg,
+            root,
+            textvariable=self._status_var,
+            font=("Helvetica", 10),
+            fg="#a0a0a0",
+            bg=bg,
         )
         self._status_label.pack()
 
@@ -89,8 +95,12 @@ class App:
         cal_frame.pack(fill="x", padx=12, pady=(6, 2))
 
         self._calibrate_btn = tk.Button(
-            cal_frame, text="Calibrate Window", font=("Helvetica", 11),
-            highlightbackground="#2980b9", width=16, command=self._on_calibrate,
+            cal_frame,
+            text="Calibrate Window",
+            font=("Helvetica", 11),
+            highlightbackground="#2980b9",
+            width=16,
+            command=self._on_calibrate,
         )
         self._calibrate_btn.pack(side="left")
 
@@ -107,29 +117,47 @@ class App:
         self._build_fishing_tab(fish_tab)
 
         from ttr_bot.ui.gardening_tab import GardeningTab
+
         garden_frame = tk.Frame(self._notebook, bg=bg)
         self._notebook.add(garden_frame, text="  Gardening  ")
         self._garden_tab = GardeningTab(
-            garden_frame, self._root, self._status_var, self._on_calibrate,
+            garden_frame,
+            self._root,
+            self._status_var,
+            self._on_calibrate,
         )
 
         from ttr_bot.ui.golfing_tab import GolfingTab
+
         golf_frame = tk.Frame(self._notebook, bg=self.BG)
         self._notebook.add(golf_frame, text="  Golf  ")
         self._golf_tab = GolfingTab(
-            golf_frame, self._root, self._status_var, self._on_calibrate,
+            golf_frame,
+            self._root,
+            self._status_var,
+            self._on_calibrate,
         )
 
         # ---- Log output ----
         log_label = tk.Label(
-            root, text="Log", font=("Helvetica", 10, "bold"),
-            fg=fg, bg=bg, anchor="w",
+            root,
+            text="Log",
+            font=("Helvetica", 10, "bold"),
+            fg=fg,
+            bg=bg,
+            anchor="w",
         )
         log_label.pack(fill="x", padx=12)
 
         self._log_text = scrolledtext.ScrolledText(
-            root, height=8, font=("Menlo", 9), bg=entry_bg, fg=fg,
-            insertbackground=fg, state="disabled", wrap="word",
+            root,
+            height=8,
+            font=("Menlo", 9),
+            bg=entry_bg,
+            fg=fg,
+            insertbackground=fg,
+            state="disabled",
+            wrap="word",
         )
         self._log_text.pack(fill="both", expand=True, padx=12, pady=(0, 12))
 
@@ -142,8 +170,13 @@ class App:
         pad = {"padx": 8, "pady": 4}
 
         settings_frame = tk.LabelFrame(
-            parent, text="Settings", font=("Helvetica", 11, "bold"),
-            fg=fg, bg=bg, bd=1, relief="groove",
+            parent,
+            text="Settings",
+            font=("Helvetica", 11, "bold"),
+            fg=fg,
+            bg=bg,
+            bd=1,
+            relief="groove",
         )
         settings_frame.pack(fill="x", **pad)
 
@@ -151,23 +184,43 @@ class App:
 
         # Max casts
         tk.Label(settings_frame, text="Max casts:", fg=fg, bg=bg).grid(
-            row=row, column=0, sticky="w", padx=8, pady=3,
+            row=row,
+            column=0,
+            sticky="w",
+            padx=8,
+            pady=3,
         )
         self._casts_var = tk.IntVar(value=settings.DEFAULT_CASTS)
         tk.Spinbox(
-            settings_frame, from_=1, to=999, textvariable=self._casts_var,
-            width=8, bg=entry_bg, fg=fg, insertbackground=fg,
+            settings_frame,
+            from_=1,
+            to=999,
+            textvariable=self._casts_var,
+            width=8,
+            bg=entry_bg,
+            fg=fg,
+            insertbackground=fg,
         ).grid(row=row, column=1, sticky="w", padx=4, pady=3)
         row += 1
 
         # Bite timeout
         tk.Label(settings_frame, text="Bite timeout (s):", fg=fg, bg=bg).grid(
-            row=row, column=0, sticky="w", padx=8, pady=3,
+            row=row,
+            column=0,
+            sticky="w",
+            padx=8,
+            pady=3,
         )
         self._timeout_var = tk.IntVar(value=int(settings.BITE_TIMEOUT_S))
         tk.Spinbox(
-            settings_frame, from_=5, to=120, textvariable=self._timeout_var,
-            width=8, bg=entry_bg, fg=fg, insertbackground=fg,
+            settings_frame,
+            from_=5,
+            to=120,
+            textvariable=self._timeout_var,
+            width=8,
+            bg=entry_bg,
+            fg=fg,
+            insertbackground=fg,
         ).grid(row=row, column=1, sticky="w", padx=4, pady=3)
         row += 1
 
@@ -177,8 +230,14 @@ class App:
 
         self._overlay_var = tk.BooleanVar(value=True)
         tk.Checkbutton(
-            checks_frame, text="Show overlay", variable=self._overlay_var,
-            fg=fg, bg=bg, selectcolor=entry_bg, activebackground=bg, activeforeground=fg,
+            checks_frame,
+            text="Show overlay",
+            variable=self._overlay_var,
+            fg=fg,
+            bg=bg,
+            selectcolor=entry_bg,
+            activebackground=bg,
+            activeforeground=fg,
             command=self._toggle_overlay,
         ).pack(side="left")
 
@@ -187,21 +246,34 @@ class App:
         btn_frame.pack(fill="x", padx=8, pady=8)
 
         self._start_btn = tk.Button(
-            btn_frame, text="▶ Start Fishing", font=("Helvetica", 12, "bold"),
-            highlightbackground="#1a8f3c", width=16, command=self._on_start,
+            btn_frame,
+            text="▶ Start Fishing",
+            font=("Helvetica", 12, "bold"),
+            highlightbackground="#1a8f3c",
+            width=16,
+            command=self._on_start,
         )
         self._start_btn.pack(side="left", padx=(0, 8))
 
         self._stop_btn = tk.Button(
-            btn_frame, text="■ Stop", font=("Helvetica", 12, "bold"),
-            highlightbackground=accent, width=10, command=self._on_stop, state="disabled",
+            btn_frame,
+            text="■ Stop",
+            font=("Helvetica", 12, "bold"),
+            highlightbackground=accent,
+            width=10,
+            command=self._on_stop,
+            state="disabled",
         )
         self._stop_btn.pack(side="left", padx=(0, 8))
 
         self._pause_btn = tk.Button(
-            btn_frame, text="Pause", font=("Helvetica", 11),
-            highlightbackground="#533483", width=8,
-            command=self._on_pause, state="disabled",
+            btn_frame,
+            text="Pause",
+            font=("Helvetica", 11),
+            highlightbackground="#533483",
+            width=8,
+            command=self._on_pause,
+            state="disabled",
         )
         self._pause_btn.pack(side="left")
 
@@ -210,14 +282,21 @@ class App:
         rec_frame.pack(fill="x", padx=8, pady=(0, 4))
 
         self._record_btn = tk.Button(
-            rec_frame, text="Record Casts", font=("Helvetica", 11),
-            highlightbackground="#e67e22", width=14, command=self._on_record_toggle,
+            rec_frame,
+            text="Record Casts",
+            font=("Helvetica", 11),
+            highlightbackground="#e67e22",
+            width=14,
+            command=self._on_record_toggle,
         )
         self._record_btn.pack(side="left", padx=(0, 8))
 
         self._record_status = tk.Label(
-            rec_frame, text="Fish manually to calibrate casting",
-            font=("Helvetica", 10), fg="#e67e22", bg=bg,
+            rec_frame,
+            text="Fish manually to calibrate casting",
+            font=("Helvetica", 10),
+            fg="#e67e22",
+            bg=bg,
         )
         self._record_status.pack(side="left")
 
@@ -245,22 +324,24 @@ class App:
             return
 
         import threading
-        from ttr_bot.core.window_manager import find_ttr_window, set_calibrated_bounds
+
         from ttr_bot.core.screen_capture import capture_window
+        from ttr_bot.core.window_manager import find_ttr_window, set_calibrated_bounds
 
         self._start_btn.config(state="disabled")
         self._status_var.set("Calibrating…")
 
         def _calibrate_and_start() -> None:
-            from ttr_bot.vision.template_matcher import clear_cache, calibrate_scale
+            from ttr_bot.vision.template_matcher import calibrate_scale, clear_cache
 
             win = find_ttr_window()
             if win is None:
                 self._root.after(0, self._start_failed, "TTR window not found")
                 return
 
-            set_calibrated_bounds(win.x, win.y, win.width, win.height,
-                                  window_id=win.window_id, pid=win.pid)
+            set_calibrated_bounds(
+                win.x, win.y, win.width, win.height, window_id=win.window_id, pid=win.pid
+            )
             log.info("Window locked: %dx%d at (%d,%d)", win.width, win.height, win.x, win.y)
 
             clear_cache()
@@ -311,16 +392,17 @@ class App:
     def _on_calibrate(self) -> None:
         import threading
 
-        from ttr_bot.core.window_manager import find_ttr_window, set_calibrated_bounds
         from ttr_bot.core.screen_capture import capture_window
+        from ttr_bot.core.window_manager import find_ttr_window, set_calibrated_bounds
 
         win = find_ttr_window()
         if win is None:
             self._status_var.set("Calibration failed — TTR not found")
             return
 
-        set_calibrated_bounds(win.x, win.y, win.width, win.height,
-                              window_id=win.window_id, pid=win.pid)
+        set_calibrated_bounds(
+            win.x, win.y, win.width, win.height, window_id=win.window_id, pid=win.pid
+        )
         log.info("Window locked: %dx%d at (%d,%d)", win.width, win.height, win.x, win.y)
 
         frame = capture_window(win)
@@ -332,7 +414,8 @@ class App:
         self._status_var.set("Calibrating…")
 
         def _run_calibration() -> None:
-            from ttr_bot.vision.template_matcher import clear_cache, calibrate_scale
+            from ttr_bot.vision.template_matcher import calibrate_scale, clear_cache
+
             clear_cache()
             scale = calibrate_scale(frame)
             self._root.after(0, self._calibration_done, scale, win.width, win.height)
@@ -364,7 +447,9 @@ class App:
             threading.Thread(target=_finish_recording, daemon=True).start()
         else:
             self._recorder.on_status = lambda msg: self._root.after(
-                0, self._record_status.config, {"text": msg},
+                0,
+                self._record_status.config,
+                {"text": msg},
             )
             self._recorder.start()
             self._record_btn.config(text="Stop Recording")
@@ -377,6 +462,7 @@ class App:
             params = fit_cast_params(samples)
             if params is not None:
                 from ttr_bot.core.input_controller import reload_cast_params
+
                 reload_cast_params()
                 self._record_status.config(
                     text=f"Done! power={params.power_base:.1f} aim={params.aim_base:.1f}"
@@ -384,9 +470,7 @@ class App:
             else:
                 self._record_status.config(text="Fit failed — try more casts")
         else:
-            self._record_status.config(
-                text=f"Need 2+ casts, got {len(samples)}"
-            )
+            self._record_status.config(text=f"Need 2+ casts, got {len(samples)}")
 
     # ------------------------------------------------------------------
     # Overlay
@@ -433,8 +517,7 @@ class App:
         available = is_window_available()
         if not self._bot.running:
             garden_running = hasattr(self, "_garden_tab") and (
-                self._garden_tab._bot.running
-                or self._garden_tab._routine_runner.running
+                self._garden_tab._bot.running or self._garden_tab._routine_runner.running
             )
             golf_running = hasattr(self, "_golf_tab") and self._golf_tab.running
             busy_other = garden_running or golf_running

@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from time import perf_counter
-from typing import Callable
 
 import numpy as np
 
@@ -309,7 +309,8 @@ def wait_for_course_detection(
             _sleep_interruptible(scan_interval_s, stop_event)
         else:
             log.warning(
-                "Golf [course_detect] — %d scoreboard attempts failed; manual pick or retry (+%.1fs)",
+                "Golf [course_detect] - %d scoreboard attempts failed;"
+                " manual pick or retry (+%.1fs)",
                 max_scoreboard_attempts,
                 perf_counter() - t_round,
             )

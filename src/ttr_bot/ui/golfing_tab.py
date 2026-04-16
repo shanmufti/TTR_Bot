@@ -5,10 +5,9 @@ from __future__ import annotations
 import os
 import threading
 import tkinter as tk
+from collections.abc import Callable
 from tkinter import ttk
-from typing import Callable
 
-from ttr_bot.config import settings
 from ttr_bot.golf.action_player import load_actions, shot_summary
 from ttr_bot.golf.detector import list_action_stems, path_for_stem
 from ttr_bot.golf.golf_bot import GolfBot
@@ -44,7 +43,7 @@ class GolfingTab:
         info = tk.Label(
             self._parent,
             text="Uses the same JSON format as Toontown-Rewritten-Bot (Custom Golf Actions).\n"
-                 "Place files in golf_actions/ — copy from your other bot's Services/CustomGolfActions.",
+            "Place files in golf_actions/.",
             font=("Helvetica", 9),
             fg="#a0a0a0",
             bg=BG,
@@ -290,7 +289,9 @@ class GolfingTab:
             tk.Button(bf, text="Use this course", command=ok, highlightbackground="#1a8f3c").pack(
                 side="left", padx=4
             )
-            tk.Button(bf, text="Skip", command=cancel, highlightbackground=ACCENT).pack(side="left", padx=4)
+            tk.Button(bf, text="Skip", command=cancel, highlightbackground=ACCENT).pack(
+                side="left", padx=4
+            )
 
         self._root.after(0, show_dialog)
         ready.wait(timeout=300.0)

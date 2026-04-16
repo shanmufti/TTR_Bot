@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import threading
 import time
+from collections.abc import Callable
 from time import perf_counter
-from typing import Callable
 
 from ttr_bot.config import settings
 from ttr_bot.golf.action_player import perform_golf_actions
@@ -98,12 +98,15 @@ class GolfBot:
             )
             self._emit(f"Hole {hole_num}/{holes_per_round}…")
 
-            manual = self.on_need_manual_course
-
-            def _wait_manual(options: list[str]) -> str | None:
-                if manual:
-                    return manual(options)
-                self._emit("No course detected — add pytesseract+tesseract, templates, or JSON files.")
+            def _wait_manual(
+                options: list[str],
+                _cb=self.on_need_manual_course,
+            ) -> str | None:
+                if _cb:
+                    return _cb(options)
+                self._emit(
+                    "No course detected — add pytesseract+tesseract, templates, or JSON files."
+                )
                 return None
 
             # After hole 1+, wait until the turn timer appears *before* opening the scoreboard.
@@ -150,9 +153,7 @@ class GolfBot:
                 continue
 
             self._emit("Step: wait for turn (before swing)…")
-            wait_until_ready_to_swing(
-                self._stop_event.is_set, interval_s=0.5, phase="pre_swing"
-            )
+            wait_until_ready_to_swing(self._stop_event.is_set, interval_s=0.5, phase="pre_swing")
             if self._stop_event.is_set():
                 break
 
