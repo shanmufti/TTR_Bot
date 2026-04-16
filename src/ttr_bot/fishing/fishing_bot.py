@@ -6,6 +6,7 @@ cast button visible.  No sell trips, no walking — just fishing.
 
 from __future__ import annotations
 
+import contextlib
 import threading
 import time
 from collections.abc import Callable
@@ -506,18 +507,14 @@ class FishingBot:
 
     def _notify_stats(self) -> None:
         if self.on_stats_update:
-            try:
+            with contextlib.suppress(Exception):
                 self.on_stats_update(self.stats)
-            except Exception:
-                pass
 
     def _status(self, msg: str) -> None:
         log.info(msg)
         if self.on_status_update:
-            try:
+            with contextlib.suppress(Exception):
                 self.on_status_update(msg)
-            except Exception:
-                pass
 
     def _finish(self, reason: str) -> None:
         self._running = False
@@ -530,7 +527,5 @@ class FishingBot:
             self.stats.skipped,
         )
         if self.on_fishing_ended:
-            try:
+            with contextlib.suppress(Exception):
                 self.on_fishing_ended(reason)
-            except Exception:
-                pass

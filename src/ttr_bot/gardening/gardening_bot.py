@@ -6,6 +6,7 @@ All clicks go through input_controller.click() which handles Retina scaling.
 
 from __future__ import annotations
 
+import contextlib
 import threading
 import time
 from collections.abc import Callable
@@ -459,17 +460,13 @@ class GardenBot:
     def _notify_status(self, msg: str) -> None:
         log.info(msg)
         if self.on_status_update:
-            try:
+            with contextlib.suppress(Exception):
                 self.on_status_update(msg)
-            except Exception:
-                pass
 
     def _notify_stats(self) -> None:
         if self.on_stats_update:
-            try:
+            with contextlib.suppress(Exception):
                 self.on_stats_update(self.stats)
-            except Exception:
-                pass
 
     def _finish(self, reason: str) -> None:
         self._running = False
@@ -480,7 +477,5 @@ class GardenBot:
             self.stats.waters_done,
         )
         if self.on_gardening_ended:
-            try:
+            with contextlib.suppress(Exception):
                 self.on_gardening_ended(reason)
-            except Exception:
-                pass

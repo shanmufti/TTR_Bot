@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import tkinter as tk
 
 from ttr_bot.fishing.fishing_bot import FishingStats
@@ -92,10 +93,8 @@ class OverlayWindow:
     def update_status(self, msg: str) -> None:
         if not self._visible:
             return
-        try:
+        with contextlib.suppress(tk.TclError):
             self._status_label.config(text=msg)
-        except tk.TclError:
-            pass
 
     def show(self) -> None:
         self._visible = True
@@ -107,7 +106,5 @@ class OverlayWindow:
 
     def destroy(self) -> None:
         self._visible = False
-        try:
+        with contextlib.suppress(tk.TclError):
             self._root.destroy()
-        except tk.TclError:
-            pass

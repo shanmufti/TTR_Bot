@@ -7,6 +7,7 @@ recording, fit_cast_params() derives power/aim curve constants.
 
 from __future__ import annotations
 
+import contextlib
 import math
 import threading
 import time
@@ -73,10 +74,8 @@ class CastRecorder:
     def _status(self, msg: str) -> None:
         log.info("Recorder: %s", msg)
         if self.on_status:
-            try:
+            with contextlib.suppress(Exception):
                 self.on_status(msg)
-            except Exception:
-                pass
 
     def _loop(self) -> None:
         from ttr_bot.core.window_manager import set_calibrated_bounds

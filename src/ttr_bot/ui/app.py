@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import threading
 import tkinter as tk
@@ -30,10 +31,8 @@ class _TkLogHandler(logging.Handler):
 
     def emit(self, record: logging.LogRecord) -> None:
         msg = self.format(record) + "\n"
-        try:
+        with contextlib.suppress(Exception):
             self._text.after(0, self._append, msg)
-        except Exception:
-            pass
 
     def _append(self, msg: str) -> None:
         try:

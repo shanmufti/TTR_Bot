@@ -17,6 +17,7 @@ Navigation approach:
 
 from __future__ import annotations
 
+import contextlib
 import os
 import threading
 import time
@@ -351,15 +352,11 @@ class GardenSweeper:
                 pyautogui.keyUp(k)
 
     def _release_all_keys(self) -> None:
-        try:
+        with contextlib.suppress(Exception):
             inp.ensure_focused()
-        except Exception:
-            pass
         for k in _ARROW_KEYS:
-            try:
+            with contextlib.suppress(Exception):
                 pyautogui.keyUp(k)
-            except Exception:
-                pass
 
     def _interruptible_sleep(self, duration: float) -> bool:
         deadline = time.monotonic() + duration
@@ -379,10 +376,8 @@ class GardenSweeper:
     def _status(self, msg: str) -> None:
         log.info("[Sweeper] %s", msg)
         if self.on_status:
-            try:
+            with contextlib.suppress(Exception):
                 self.on_status(msg)
-            except Exception:
-                pass
 
     def _print_summary(self, r: SweepResult) -> None:
         msg = (

@@ -7,6 +7,7 @@ the flower selection, and relays progress / status to the UI.
 
 from __future__ import annotations
 
+import contextlib
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -176,15 +177,11 @@ class RoutineRunner:
 
     @staticmethod
     def _release_all_keys() -> None:
-        try:
+        with contextlib.suppress(Exception):
             inp.ensure_focused()
-        except Exception:
-            pass
         for k in ("up", "down", "left", "right"):
-            try:
+            with contextlib.suppress(Exception):
                 pyautogui.keyUp(k)
-            except Exception:
-                pass
 
     # ------------------------------------------------------------------
     # Notifications
@@ -192,24 +189,18 @@ class RoutineRunner:
 
     def _notify_progress(self, progress: RoutineProgress) -> None:
         if self.on_progress:
-            try:
+            with contextlib.suppress(Exception):
                 self.on_progress(progress)
-            except Exception:
-                pass
 
     def _notify_status(self, msg: str) -> None:
         log.info(msg)
         if self.on_status_update:
-            try:
+            with contextlib.suppress(Exception):
                 self.on_status_update(msg)
-            except Exception:
-                pass
 
     def _finish(self, reason: str) -> None:
         self._running = False
         log.info("Routine ended: %s", reason)
         if self.on_routine_ended:
-            try:
+            with contextlib.suppress(Exception):
                 self.on_routine_ended(reason)
-            except Exception:
-                pass

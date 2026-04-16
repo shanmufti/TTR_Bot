@@ -12,6 +12,7 @@ the next bed.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import threading
 import time
@@ -236,10 +237,8 @@ class GardenWatcher:
     def _status(self, msg: str) -> None:
         log.info("[Watcher] %s", msg)
         if self.on_status:
-            try:
+            with contextlib.suppress(Exception):
                 self.on_status(msg)
-            except Exception:
-                pass
 
     def _print_summary(self, r: WatcherResult) -> None:
         msg = (
