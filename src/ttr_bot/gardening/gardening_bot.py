@@ -123,7 +123,7 @@ class GardenBot:
 
     def _run_actions(self, actions: list[GardenAction]) -> None:
         try:
-            if not self._ensure_calibrated():
+            if not self.ensure_calibrated():
                 self._finish("Calibration failed — stand at garden first")
                 return
 
@@ -140,7 +140,7 @@ class GardenBot:
                     self._notify_status(f"{label} Planting {action.flower_name}…")
                     self.stats.current_action = f"Planting {action.flower_name}"
                     self._notify_stats()
-                    ok = self._plant_flower(action.flower_name, action.bean_sequence)
+                    ok = self.plant_flower(action.flower_name, action.bean_sequence)
                     if ok:
                         self.stats.flowers_planted += 1
                         self._notify_stats()
@@ -152,7 +152,7 @@ class GardenBot:
                     self._notify_status(f"{label} Watering ×{action.water_count}…")
                     self.stats.current_action = f"Watering ×{action.water_count}"
                     self._notify_stats()
-                    ok = self._water_plant(action.water_count)
+                    ok = self.water_plant(action.water_count)
                     if not ok:
                         self._finish("Water failed: button not found")
                         return
@@ -168,7 +168,7 @@ class GardenBot:
     # Core gardening operations
     # ------------------------------------------------------------------
 
-    def _pick_flower(self) -> bool:
+    def pick_flower(self) -> bool:
         """Click the Pick button to remove the existing flower."""
         t0 = time.monotonic()
         if not self._find_and_click("pick_flower_button"):
@@ -186,11 +186,11 @@ class GardenBot:
         log.info("Picked flower — total %.0fms", (time.monotonic() - t0) * 1000)
         return True
 
-    def _plant_flower_no_pick(self, flower_name: str, bean_sequence: str) -> bool:
+    def plant_flower_no_pick(self, flower_name: str, bean_sequence: str) -> bool:
         """Plant sequence skipping auto-pick (caller already picked)."""
         return self._do_plant(flower_name, bean_sequence)
 
-    def _plant_flower(self, flower_name: str, bean_sequence: str) -> bool:
+    def plant_flower(self, flower_name: str, bean_sequence: str) -> bool:
         """Full plant sequence: auto-detect bed state → pick if needed → plant → water."""
 
         win = find_ttr_window()
@@ -319,7 +319,7 @@ class GardenBot:
         if settings.GARDEN_WATERS_AFTER_PLANT > 0:
             self._notify_status(f"Watering new {flower_name}…")
             t0 = time.monotonic()
-            if not self._water_plant(settings.GARDEN_WATERS_AFTER_PLANT):
+            if not self.water_plant(settings.GARDEN_WATERS_AFTER_PLANT):
                 self._notify_status("Watering failed after planting — game state may have changed")
                 return False
             log.info("[Timing] water_after_plant=%.0fms", (time.monotonic() - t0) * 1000)
@@ -328,7 +328,7 @@ class GardenBot:
         log.info("Planted %s successfully", flower_name)
         return True
 
-    def _water_plant(self, count: int) -> bool:
+    def water_plant(self, count: int) -> bool:
         """Click the watering can *count* times. Returns False on failure."""
         for i in range(count):
             if self._stop_event.is_set():
@@ -415,7 +415,7 @@ class GardenBot:
         log.warning("Template %s not found within %.1fs (%d polls)", template_name, timeout, polls)
         return None
 
-    def _ensure_calibrated(self) -> bool:
+    def ensure_calibrated(self) -> bool:
         """Verify scale calibration is set, running it if needed."""
         from ttr_bot.core.window_manager import set_calibrated_bounds
         from ttr_bot.vision import template_matcher as tm

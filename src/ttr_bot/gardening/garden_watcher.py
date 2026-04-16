@@ -70,7 +70,7 @@ class GardenWatcher:
 
         self._status(f"Watching — walk to beds, I'll handle the rest ({flower_name})")
 
-        if not self._bot._ensure_calibrated():
+        if not self._bot.ensure_calibrated():
             self._status("Calibration failed")
             return result
 
@@ -201,7 +201,7 @@ class GardenWatcher:
     ) -> None:
         if state == "pick":
             self._status(f"Bed #{bed_num}: picking → planting {flower_name} → watering")
-            if self._bot._pick_flower():
+            if self._bot.pick_flower():
                 result.beds_picked += 1
                 t_gap = time.monotonic()
                 time.sleep(1.0)
@@ -209,11 +209,11 @@ class GardenWatcher:
                     "[Timing] pick_to_plant_gap=%.0fms (sleep 1.0s)",
                     (time.monotonic() - t_gap) * 1000,
                 )
-                if self._bot._plant_flower_no_pick(flower_name, bean_sequence):
+                if self._bot.plant_flower_no_pick(flower_name, bean_sequence):
                     result.beds_planted += 1
         elif state == "plant":
             self._status(f"Bed #{bed_num}: planting {flower_name} → watering")
-            if self._bot._plant_flower_no_pick(flower_name, bean_sequence):
+            if self._bot.plant_flower_no_pick(flower_name, bean_sequence):
                 result.beds_planted += 1
 
     def _debug_save(self, frame, state: str, bed_num: int) -> None:

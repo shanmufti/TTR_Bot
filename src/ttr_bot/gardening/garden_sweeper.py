@@ -95,7 +95,7 @@ class GardenSweeper:
                 os.remove(os.path.join(_DEBUG_DIR, f))
         self._status(f"Starting sweep — {flower_name}, target {target_beds} beds")
 
-        if not self._bot._ensure_calibrated():
+        if not self._bot.ensure_calibrated():
             result.reason = "Calibration failed"
             return result
 
@@ -294,7 +294,7 @@ class GardenSweeper:
             self._do_pick_and_plant(bed_num, flower_name, bean_sequence, result)
         elif state == "plant":
             self._status(f"Bed #{bed_num}: planting {flower_name}")
-            if self._bot._plant_flower(flower_name, bean_sequence):
+            if self._bot.plant_flower(flower_name, bean_sequence):
                 result.beds_planted += 1
         else:
             self._status(f"Bed #{bed_num}: state={state} — skipping")
@@ -307,11 +307,11 @@ class GardenSweeper:
         result: SweepResult,
     ) -> None:
         self._status(f"Bed #{bed_num}: picking grown flower")
-        if self._bot._pick_flower():
+        if self._bot.pick_flower():
             result.beds_picked += 1
             time.sleep(1.0)
             self._status(f"Bed #{bed_num}: planting {flower_name}")
-            if self._bot._plant_flower_no_pick(flower_name, bean_sequence):
+            if self._bot.plant_flower_no_pick(flower_name, bean_sequence):
                 result.beds_planted += 1
 
     # ------------------------------------------------------------------
