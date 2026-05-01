@@ -1,4 +1,4 @@
-"""Golfing tab — custom JSON replay + auto round (ported from Toontown-Rewritten-Bot)."""
+"""Golfing tab — custom JSON replay and auto round."""
 
 import os
 import threading
@@ -42,7 +42,7 @@ class GolfingTab:
 
         info = tk.Label(
             self._parent,
-            text="Uses the same JSON format as Toontown-Rewritten-Bot (Custom Golf Actions).\n"
+            text="Custom golf runs use JSON files under golf_actions/.\n"
             "Place files in golf_actions/.",
             font=("Helvetica", 9),
             fg="#a0a0a0",

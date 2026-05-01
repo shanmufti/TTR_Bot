@@ -1,6 +1,6 @@
 # TTR Bot (macOS)
 
-A macOS automation bot for Toontown Rewritten, inspired by [primetime43's Windows bot](https://github.com/primetime43/Toontown-Rewritten-Bot). Uses computer vision (OpenCV, template matching) to automate fishing, gardening, and golfing.
+A macOS automation assistant for **Toontown Rewritten**. It uses computer vision (OpenCV, template matching) and scripted input to help with fishing, gardening, and golf—controlled from a small desktop app.
 
 ## Features
 
@@ -145,9 +145,8 @@ TTR_Bot/
   tests/                        — Test scripts
 ```
 
-## Credits
+## Credits & disclaimer
 
-- App icon is **original** artwork (cartoon-MMO inspired palette); not affiliated with Disney or Toontown Rewritten.
-- Fishing detection logic ported from [primetime43/Toontown-Rewritten-Bot](https://github.com/primetime43/Toontown-Rewritten-Bot) (C#/Windows)
-- Golf action JSON format compatible with the same project
-- Adapted for macOS using Quartz APIs and Python
+- **TTR Bot** is an independent community project. It is **not** affiliated with Disney, Toontown Rewritten, or their respective owners.
+- App icon is **original** artwork (cartoon-MMO inspired palette); not official game art.
+- Built with Python, OpenCV, Tkinter, and macOS Quartz (window capture and focus).

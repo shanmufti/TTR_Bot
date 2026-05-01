@@ -154,7 +154,7 @@ SWEEP_MAX_LAPS = 3  # perimeter laps before giving up
 SWEEP_POST_INTERACT_WALK_S = 0.6  # walk-away time after interacting with a bed
 
 # ---------------------------------------------------------------------------
-# Golf (Custom Golf Actions JSON — same format as Toontown-Rewritten-Bot)
+# Golf (custom golf actions JSON)
 # ---------------------------------------------------------------------------
 GOLF_SCAN_INTERVAL_S = 2.0
 GOLF_PRE_SWING_DELAY_S = 1.5

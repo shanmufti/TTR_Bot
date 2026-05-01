@@ -1,4 +1,4 @@
-"""Golf automation — custom JSON action replay (ported from Toontown-Rewritten-Bot)."""
+"""Golf automation — custom JSON action replay."""
 
 from ttr_bot.golf.golf_bot import GolfBot
 
