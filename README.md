@@ -140,12 +140,14 @@ TTR_Bot/
     gardening_routines/         — Recorded garden routines (JSON)
     golf_actions/               — Per-course golf actions (JSON)
     sell_paths/                 — Sell walk sequences (JSON)
+  packaging/macos/              — App icon (.icns), entitlements; `./scripts/build_mac_icon.sh` rebuilds .icns
   tools/                        — Standalone utility scripts
   tests/                        — Test scripts
 ```
 
 ## Credits
 
+- App icon is **original** artwork (cartoon-MMO inspired palette); not affiliated with Disney or Toontown Rewritten.
 - Fishing detection logic ported from [primetime43/Toontown-Rewritten-Bot](https://github.com/primetime43/Toontown-Rewritten-Bot) (C#/Windows)
 - Golf action JSON format compatible with the same project
 - Adapted for macOS using Quartz APIs and Python

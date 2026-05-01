@@ -64,12 +64,13 @@ coll = COLLECT(
 app = BUNDLE(
     coll,
     name='TTR Bot.app',
-    icon=None,
+    icon='packaging/macos/AppIcon.icns',
     bundle_identifier='com.ttrbot.app',
     info_plist={
         'NSHighResolutionCapable': True,
         'CFBundleShortVersionString': '0.2.1',
         'CFBundleVersion': '0.2.1',
+        'CFBundleIconFile': 'AppIcon',
         'NSHumanReadableCopyright': 'Copyright © TTR Bot contributors',
     },
 )
