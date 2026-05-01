@@ -1,23 +1,32 @@
 """All configurable thresholds, delays, and defaults for the TTR bot.
 
-Values can be overridden by placing a ``config.toml`` file next to
-this package (i.e. at ``<project>/data/config.toml``).  Only the keys
-present in the TOML file are patched; everything else keeps the
-defaults defined below.
+Values can be overridden from ``config.toml``:
+
+- **Running from source:** ``data/config.toml``
+- **Running the packaged ``.app``:** ``~/Library/Application Support/TTR Bot/config.toml``
+
+Only keys present in the TOML file are patched; everything else keeps the defaults
+defined below.
 """
 
 import os
-from pathlib import Path
+
+from ttr_bot.config import app_paths
 
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
-PROJECT_ROOT = str(Path(__file__).resolve().parents[3])
-DATA_DIR = os.path.join(PROJECT_ROOT, "data")
+PROJECT_ROOT = str(
+    app_paths.user_writable_root()
+    if app_paths.is_frozen_bundle()
+    else app_paths.development_project_root()
+)
+DATA_DIR = str(app_paths.bundled_resources_data_dir())
 TEMPLATES_DIR = os.path.join(DATA_DIR, "templates")
-LOGS_DIR = os.path.join(PROJECT_ROOT, "logs")
-GOLF_ACTIONS_DIR = os.path.join(DATA_DIR, "golf_actions")
-SELL_PATHS_DIR = os.path.join(DATA_DIR, "sell_paths")
+LOGS_DIR = str(app_paths.logs_directory())
+GOLF_ACTIONS_DIR = str(app_paths.user_golf_actions_dir())
+SELL_PATHS_DIR = str(app_paths.user_sell_paths_dir())
+DEBUG_OUTPUT_BASE_DIR = str(app_paths.debug_output_base_dir())
 
 # ---------------------------------------------------------------------------
 # Game window
@@ -154,7 +163,7 @@ GOLF_BETWEEN_HOLES_DELAY_S = 3.0
 # ---------------------------------------------------------------------------
 # Optional user overrides from config.toml
 # ---------------------------------------------------------------------------
-_CONFIG_PATH = os.path.join(DATA_DIR, "config.toml")
+_CONFIG_PATH = str(app_paths.config_toml_path())
 
 
 def _collect_overrides(user_cfg: dict) -> list[tuple[str, object]]:

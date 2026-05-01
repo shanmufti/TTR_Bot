@@ -12,6 +12,25 @@ A macOS automation bot for Toontown Rewritten, inspired by [primetime43's Window
 - **Live overlay** showing stats (fish caught, cast count)
 - **Sell cycles** with automated walk-to-fisherman sequences
 
+## Download (pre-built app)
+
+Apple Silicon builds are published as **`TTR-Bot-macos-arm64.zip`** on [**GitHub Releases**](https://github.com/shanmufti/TTR_Bot/releases). Unzip and drag **TTR Bot.app** into Applications.
+
+Grant **Screen Recording** and **Accessibility** to **TTR Bot** (the app itself), not only Terminal, under **System Settings → Privacy & Security**.
+
+Intel Macs are not built in CI yet; use **Setup** below or build locally with `./scripts/build_mac_app.sh`.
+
+### Cutting a release (maintainers)
+
+Push a version tag (the workflow attaches the zip to that GitHub Release):
+
+```bash
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+You can also run **Actions → Release (macOS app) → Run workflow** to produce a downloadable artifact without tagging.
+
 ## Requirements
 
 - macOS 12+ (Monterey or later)

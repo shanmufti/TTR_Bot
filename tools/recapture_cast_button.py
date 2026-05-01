@@ -5,6 +5,8 @@ Finds the red circular button near the bottom-center of the dock view
 using color detection, crops it, and saves as the new template.
 """
 
+import os
+
 import cv2
 import numpy as np
 
@@ -73,7 +75,7 @@ def main() -> None:
     # Also save a debug view
     debug = frame.copy()
     cv2.rectangle(debug, (abs_x1, abs_y1), (abs_x2, abs_y2), (0, 255, 0), 3)
-    debug_path = f"{settings.DATA_DIR}/_debug/cast_button_capture.png"
+    debug_path = os.path.join(settings.DEBUG_OUTPUT_BASE_DIR, "cast_button_capture.png")
     cv2.imwrite(debug_path, debug)
     print(f"Debug: {debug_path}")
 

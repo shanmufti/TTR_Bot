@@ -41,7 +41,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--debug-dir",
-        default=os.path.join(settings.PROJECT_ROOT, "data", "_debug"),
+        default=settings.DEBUG_OUTPUT_BASE_DIR,
         help="Directory for full snapshot + ROI previews.",
     )
     args = parser.parse_args()

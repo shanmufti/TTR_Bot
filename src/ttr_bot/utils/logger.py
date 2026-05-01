@@ -35,8 +35,9 @@ def get_logger() -> logging.Logger:
     )
     logger.addHandler(console)
 
-    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-    log_dir = os.path.join(project_root, "logs")
+    from ttr_bot.config import settings
+
+    log_dir = settings.LOGS_DIR
     os.makedirs(log_dir, exist_ok=True)
 
     _prune_old_logs(log_dir)

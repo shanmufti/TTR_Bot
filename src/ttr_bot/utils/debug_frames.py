@@ -1,7 +1,7 @@
 """Save annotated debug frames for vision pipeline inspection.
 
 Enable by setting the env var ``TTR_DEBUG_FRAMES=1`` or calling
-``enable()``.  Frames are written to ``data/_debug/fishing/`` with
+``enable()``.  Frames are written under ``DEBUG_OUTPUT_BASE_DIR/fishing/`` with
 timestamps so they can be reviewed after a session.
 """
 
@@ -16,7 +16,7 @@ import numpy as np
 from ttr_bot.config import settings
 from ttr_bot.utils.logger import log
 
-_DEBUG_DIR = Path(settings.DATA_DIR) / "_debug" / "fishing"
+_DEBUG_DIR = Path(settings.DEBUG_OUTPUT_BASE_DIR) / "fishing"
 
 
 class _DebugState:

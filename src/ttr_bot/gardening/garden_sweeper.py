@@ -40,7 +40,7 @@ from ttr_bot.utils import debug_frames as dbg
 from ttr_bot.utils.logger import log
 from ttr_bot.vision.flower_detector import debug_annotate, steering_hint
 
-_DEBUG_DIR = os.path.join(settings.DATA_DIR, "_debug", "sweep")
+_DEBUG_DIR = os.path.join(settings.DEBUG_OUTPUT_BASE_DIR, "sweep")
 
 _ARROW_KEYS = ("up", "down", "left", "right")
 

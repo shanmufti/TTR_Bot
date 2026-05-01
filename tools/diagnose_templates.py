@@ -88,7 +88,7 @@ def main() -> None:
 
     import os
 
-    out_path = f"{settings.DATA_DIR}/_debug/template_diag.png"
+    out_path = os.path.join(settings.DEBUG_OUTPUT_BASE_DIR, "template_diag.png")
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     cv2.imwrite(out_path, out)
     print(f"\nAnnotated frame saved: {out_path}")

@@ -26,7 +26,7 @@ from ttr_bot.gardening.gardening_bot import GardenBot
 from ttr_bot.utils import debug_frames as dbg
 from ttr_bot.utils.logger import log
 
-_DEBUG_DIR = os.path.join(settings.DATA_DIR, "_debug", "watcher")
+_DEBUG_DIR = os.path.join(settings.DEBUG_OUTPUT_BASE_DIR, "watcher")
 
 _POLL_INTERVAL_S = 0.3
 _HEARTBEAT_POLLS = 30  # log a heartbeat every ~9 s of silence

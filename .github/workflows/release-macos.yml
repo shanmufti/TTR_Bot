@@ -1,0 +1,55 @@
+# Build TTR Bot.app and attach a zip to GitHub Releases (tags) or as a CI artifact (manual).
+name: Release (macOS app)
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  macos-app:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      # setup-python's macOS builds often lack _tkinter; Homebrew python-tk matches local dev.
+      - name: Install Python 3.13 with Tkinter
+        run: brew install python-tk@3.13
+
+      - name: Verify tkinter
+        run: |
+          PY="$(brew --prefix python-tk@3.13)/bin/python3.13"
+          "$PY" -c "import tkinter; print('tkinter OK')"
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install deps and build .app
+        run: |
+          export PY="$(brew --prefix python-tk@3.13)/bin/python3.13"
+          uv sync --python "$PY" --group dev --frozen
+          uv run --python "$PY" pyinstaller --noconfirm "TTR Bot.spec"
+
+      - name: Zip app bundle
+        run: |
+          cd dist
+          ditto -c -k --keepParent "TTR Bot.app" "$GITHUB_WORKSPACE/TTR-Bot-macos-arm64.zip"
+          ls -la "$GITHUB_WORKSPACE/TTR-Bot-macos-arm64.zip"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TTR-Bot-macos-arm64
+          path: TTR-Bot-macos-arm64.zip
+
+      - name: Publish GitHub Release asset
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: TTR-Bot-macos-arm64.zip
+          generate_release_notes: true

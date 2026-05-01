@@ -17,7 +17,7 @@ from ttr_bot.vision.color_matcher import (
 from ttr_bot.vision.fish_detector import detect_fish_shadows, find_best_fish, find_best_moving_fish
 from ttr_bot.vision.pond_detector import detect_pond
 
-OUT = f"{settings.DATA_DIR}/_debug"
+OUT = settings.DEBUG_OUTPUT_BASE_DIR
 
 
 def annotate_frame(frame, pond, candidates, best, label):
