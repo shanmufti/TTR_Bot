@@ -1,6 +1,6 @@
 [project]
 name = "ttr-bot"
-version = "0.2.0"
+version = "0.2.1"
 description = "Toontown Rewritten automation bot"
 requires-python = ">=3.13"
 dependencies = [

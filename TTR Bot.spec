@@ -68,8 +68,8 @@ app = BUNDLE(
     bundle_identifier='com.ttrbot.app',
     info_plist={
         'NSHighResolutionCapable': True,
-        'CFBundleShortVersionString': '0.2.0',
-        'CFBundleVersion': '0.2.0',
+        'CFBundleShortVersionString': '0.2.1',
+        'CFBundleVersion': '0.2.1',
         'NSHumanReadableCopyright': 'Copyright © TTR Bot contributors',
     },
 )

@@ -25,8 +25,8 @@ Intel Macs are not built in CI yet; use **Setup** below or build locally with `.
 Push a version tag (the workflow attaches the zip to that GitHub Release):
 
 ```bash
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.2.1
+git push origin v0.2.1
 ```
 
 You can also run **Actions → Release (macOS app) → Run workflow** to produce a downloadable artifact without tagging.
