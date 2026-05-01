@@ -31,6 +31,32 @@ git push origin v0.2.1
 
 You can also run **Actions → Release (macOS app) → Run workflow** to produce a downloadable artifact without tagging.
 
+### Signed & notarized builds (Gatekeeper-friendly)
+
+Unsigned downloads often trigger **“can’t be opened because Apple cannot check it for malicious software”**. Fixing that requires an **Apple Developer Program** membership ($99/year): a **Developer ID Application** certificate, **code signing**, and **notarization** (Apple scans the build, then **stapling** attaches the ticket to the `.app`).
+
+When the following **repository secrets** are set, the release workflow signs and notarizes **`TTR Bot.app`** before zipping:
+
+| Secret | Purpose |
+|--------|---------|
+| `MACOS_CODESIGN_P12` | Base64-encoded **Developer ID Application** `.p12` export |
+| `MACOS_CODESIGN_P12_PASSWORD` | Password for that `.p12` |
+| `MACOS_CODESIGN_IDENTITY` | Full name from Keychain / `security find-identity -v -p codesigning`, e.g. `Developer ID Application: Your Name (XXXXXXXXXX)` |
+| `APPLE_ID` | Apple ID email (notarization) |
+| `APPLE_TEAM_ID` | 10-character Team ID |
+| `APPLE_APP_SPECIFIC_PASSWORD` | [App-specific password](https://support.apple.com/en-us/102654) for notarization (not your Apple ID login password) |
+
+Omit these secrets to keep publishing **unsigned** builds (users can still **Control-click → Open** once).
+
+Local signing after `./scripts/build_mac_app.sh`:
+
+```bash
+export MACOS_CODESIGN_P12="$(base64 -i ~/path/to/DeveloperID.p12)"
+export MACOS_CODESIGN_P12_PASSWORD='…'
+export MACOS_CODESIGN_IDENTITY='Developer ID Application: …'
+bash scripts/ci_codesign_mac_app.sh "dist/TTR Bot.app"
+```
+
 ## Requirements
 
 - macOS 12+ (Monterey or later)
