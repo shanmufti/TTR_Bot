@@ -16,14 +16,53 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # setup-python's macOS builds often lack _tkinter; Homebrew python-tk matches local dev.
-      - name: Install Python 3.13 with Tkinter
-        run: brew install python-tk@3.13
+      # Prefer python.org build from setup-python (usually includes tkinter on macOS).
+      # If not, fall back to Homebrew python-tk and pick whichever bin imports tkinter.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          architecture: arm64
 
-      - name: Verify tkinter
+      - name: Resolve Python with tkinter
+        id: python
         run: |
-          PY="$(brew --prefix python-tk@3.13)/bin/python3.13"
-          "$PY" -c "import tkinter; print('tkinter OK')"
+          set -euo pipefail
+          try_py() {
+            local bin="$1"
+            [ -x "$bin" ] || return 1
+            if "$bin" -c "import tkinter" 2>/dev/null; then
+              echo "$bin"
+              return 0
+            fi
+            return 1
+          }
+          PY_EXE=""
+          for cand in "$(command -v python3 || true)" "$(command -v python || true)"; do
+            [ -n "$cand" ] || continue
+            if PY_EXE="$(try_py "$cand")"; then
+              break
+            fi
+          done
+          if [ -z "${PY_EXE}" ]; then
+            echo "setup-python build has no tkinter; installing Homebrew python-tk@3.13"
+            brew install python-tk@3.13
+            ROOT="$(brew --prefix python-tk@3.13)/bin"
+            shopt -s nullglob
+            for cand in "${ROOT}"/python3.* "${ROOT}/python3"; do
+              if PY_EXE="$(try_py "$cand")"; then
+                break
+              fi
+            done
+            shopt -u nullglob
+          fi
+          if [ -z "${PY_EXE}" ]; then
+            echo "::error::No Python with tkinter found"
+            ls -la "$(brew --prefix python-tk@3.13)/bin" 2>/dev/null || true
+            exit 1
+          fi
+          echo "Using Python: ${PY_EXE}"
+          "${PY_EXE}" -c "import tkinter; print('tkinter OK')"
+          echo "exe=${PY_EXE}" >> "${GITHUB_OUTPUT}"
 
       - uses: astral-sh/setup-uv@v5
         with:
@@ -31,15 +70,14 @@ jobs:
 
       - name: Install deps and build .app
         run: |
-          export PY="$(brew --prefix python-tk@3.13)/bin/python3.13"
-          uv sync --python "$PY" --group dev --frozen
-          uv run --python "$PY" pyinstaller --noconfirm "TTR Bot.spec"
+          uv sync --python "${{ steps.python.outputs.exe }}" --group dev --frozen
+          uv run --python "${{ steps.python.outputs.exe }}" pyinstaller --noconfirm "TTR Bot.spec"
 
       - name: Zip app bundle
         run: |
           cd dist
-          ditto -c -k --keepParent "TTR Bot.app" "$GITHUB_WORKSPACE/TTR-Bot-macos-arm64.zip"
-          ls -la "$GITHUB_WORKSPACE/TTR-Bot-macos-arm64.zip"
+          ditto -c -k --keepParent "TTR Bot.app" "${GITHUB_WORKSPACE}/TTR-Bot-macos-arm64.zip"
+          ls -la "${GITHUB_WORKSPACE}/TTR-Bot-macos-arm64.zip"
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
