@@ -1,6 +1,7 @@
 """Golfing tab — custom JSON replay + auto round (ported from Toontown-Rewritten-Bot)."""
 
 import os
+import threading
 import tkinter as tk
 from collections.abc import Callable
 from tkinter import ttk
@@ -24,11 +25,13 @@ class GolfingTab:
         root: tk.Tk,
         status_var: tk.StringVar,
         calibrate_fn: Callable[[], None],
+        shutdown_abort: threading.Event | None = None,
     ) -> None:
         self._parent = parent
         self._root = root
         self._status_var = status_var
         self._calibrate_fn = calibrate_fn
+        self._shutdown_abort = shutdown_abort
 
         self._bot = GolfBot()
         self._build_ui()
@@ -243,7 +246,9 @@ class GolfingTab:
         self._run_custom_btn.config(state="disabled")
         self._auto_btn.config(state="disabled")
         self._stop_btn.config(state="normal")
-        self._bot.on_need_manual_course = lambda opts: pick_course_blocking(self._root, opts)
+        self._bot.on_need_manual_course = lambda opts: pick_course_blocking(
+            self._root, opts, abort_event=self._shutdown_abort
+        )
         self._bot.start_auto_round(holes=self._holes_var.get())
 
     def _on_stop(self) -> None:

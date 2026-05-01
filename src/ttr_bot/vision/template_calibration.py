@@ -20,7 +20,7 @@ from ttr_bot.utils.logger import log
 if TYPE_CHECKING:
     from ttr_bot.vision.template_matcher import TemplateMatcher
 
-_COARSE_SCALE_RANGE = np.arange(0.8, 1.3, 0.1)
+_COARSE_SCALE_RANGE = np.arange(0.4, 1.3, 0.1)
 _FINE_STEP = 0.04
 
 _MIN_CALIBRATION_CONF = 0.60

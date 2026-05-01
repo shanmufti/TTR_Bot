@@ -1,5 +1,6 @@
 """Tkinter GUI for the TTR Bot (Fishing, Gardening, Golf)."""
 
+import contextlib
 import logging
 import threading
 import tkinter as tk
@@ -16,6 +17,10 @@ class App:
     """Main application window with tabbed Fishing / Gardening / Golf UI."""
 
     def __init__(self) -> None:
+        self._shutdown_abort = threading.Event()
+        self._poll_after_id: str | None = None
+        self._tk_log_handler: logging.Handler | None = None
+
         self._root = tk.Tk()
         self._root.title("TTR Bot")
         screen_w = self._root.winfo_screenwidth()
@@ -97,7 +102,13 @@ class App:
 
         golf_frame = tk.Frame(notebook, bg=BG)
         notebook.add(golf_frame, text="  Golf  ")
-        self._golf_tab = GolfingTab(golf_frame, self._root, self._status_var, self._on_calibrate)
+        self._golf_tab = GolfingTab(
+            golf_frame,
+            self._root,
+            self._status_var,
+            self._on_calibrate,
+            shutdown_abort=self._shutdown_abort,
+        )
 
         # ---- Log output ----
         tk.Label(
@@ -148,10 +159,12 @@ class App:
     # ------------------------------------------------------------------
 
     def _attach_logger(self) -> None:
-        handler = TkLogHandler(self._log_text)
-        handler.setLevel(logging.INFO)
-        handler.setFormatter(logging.Formatter("%(asctime)s  %(message)s", datefmt="%H:%M:%S"))
-        log.addHandler(handler)
+        self._tk_log_handler = TkLogHandler(self._log_text)
+        self._tk_log_handler.setLevel(logging.INFO)
+        self._tk_log_handler.setFormatter(
+            logging.Formatter("%(asctime)s  %(message)s", datefmt="%H:%M:%S")
+        )
+        log.addHandler(self._tk_log_handler)
 
     # ------------------------------------------------------------------
     # Periodic checks
@@ -166,7 +179,7 @@ class App:
             self._status_var.set("TTR window detected" if available else "TTR window not found")
         can_start = available and not any_running
         self._fishing_tab.set_start_enabled(can_start)
-        self._root.after(2000, self._poll_window_status)
+        self._poll_after_id = self._root.after(2000, self._poll_window_status)
 
     # ------------------------------------------------------------------
     # Run
@@ -176,8 +189,35 @@ class App:
         self._root.protocol("WM_DELETE_WINDOW", self._on_close)
         self._root.mainloop()
 
+    def _cancel_poll(self) -> None:
+        if self._poll_after_id is not None:
+            with contextlib.suppress(tk.TclError):
+                self._root.after_cancel(self._poll_after_id)
+            self._poll_after_id = None
+
+    def _detach_logger(self) -> None:
+        if self._tk_log_handler is not None:
+            log.removeHandler(self._tk_log_handler)
+            self._tk_log_handler.close()
+            self._tk_log_handler = None
+
+    def _dismiss_modal_children(self) -> None:
+        """Close modal Toplevels (e.g. golf course picker) and release grabs."""
+        with contextlib.suppress(tk.TclError):
+            for child in tuple(self._root.winfo_children()):
+                if isinstance(child, tk.Toplevel):
+                    with contextlib.suppress(tk.TclError):
+                        child.grab_release()
+                    with contextlib.suppress(tk.TclError):
+                        child.destroy()
+
     def _on_close(self) -> None:
+        self._shutdown_abort.set()
+        self._cancel_poll()
+        self._detach_logger()
+        self._dismiss_modal_children()
         self._fishing_tab.shutdown()
         self._garden_tab.shutdown()
         self._golf_tab.shutdown()
+        self._root.quit()
         self._root.destroy()

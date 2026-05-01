@@ -7,10 +7,18 @@ from tkinter import ttk
 from ttr_bot.ui.theme import ACCENT, BG, FG
 
 
-def pick_course_blocking(root: tk.Tk, options: list[str]) -> str | None:
+def pick_course_blocking(
+    root: tk.Tk,
+    options: list[str],
+    *,
+    abort_event: threading.Event | None = None,
+) -> str | None:
     """Show a modal course-picker dialog.  Blocks the calling thread until the
     user selects a course or cancels.  Must be called from a *worker* thread —
     the actual dialog is scheduled on the Tk main loop via ``root.after``.
+
+    If ``abort_event`` is set (e.g. app is quitting), returns ``None`` promptly
+    so the worker thread can observe :meth:`~ttr_bot.core.bot_base.BotBase.stop`.
     """
     result: list[str | None] = [None]
     ready = threading.Event()
@@ -54,5 +62,8 @@ def pick_course_blocking(root: tk.Tk, options: list[str]) -> str | None:
         )
 
     root.after(0, show_dialog)
-    ready.wait(timeout=300.0)
+    while not ready.is_set():
+        if abort_event is not None and abort_event.is_set():
+            return None
+        ready.wait(timeout=0.2)
     return result[0]

@@ -133,7 +133,15 @@ def confirm_plant(
     time.sleep(settings.GARDEN_POST_PLANT_DELAY_S)
 
     t0 = time.monotonic()
-    ok_found = find_and_click("ok_button", timeout=8.0, stop_event=stop_event)
+    # Template center can sit slightly below the OK hitbox; nudge upward.
+    ok_found = find_and_click(
+        "ok_button",
+        timeout=8.0,
+        stop_event=stop_event,
+        threshold=0.72,
+        region_frac=(0.04, 0.06, 0.96, 0.74),
+        click_offset=(0, -10),
+    )
     ok_ms = (time.monotonic() - t0) * 1000
     log.info("[Timing] ok_btn_%s=%.0fms", "click" if ok_found else "timeout", ok_ms)
     time.sleep(settings.GARDEN_POST_CONFIRM_DELAY_S)
