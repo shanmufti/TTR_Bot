@@ -14,10 +14,14 @@ from ttr_bot.config import settings
 from ttr_bot.core.bot_base import BotBase
 from ttr_bot.core.screen_capture import capture_window
 from ttr_bot.core.window_manager import find_ttr_window
-from ttr_bot.gardening.garden_ui_helpers import ensure_calibrated, find_and_click
+from ttr_bot.gardening.bed_ui import BedState, classify_bed_state
+from ttr_bot.gardening.garden_ui_helpers import (
+    click_pick_or_remove_grown_flower,
+    ensure_calibrated,
+    find_and_click,
+)
 from ttr_bot.gardening.plant_sequence import execute_plant
 from ttr_bot.utils.logger import log
-from ttr_bot.vision.template_matcher import is_element_visible
 
 
 @dataclass(slots=True)
@@ -130,11 +134,23 @@ class GardenBot(BotBase):
     # Core gardening operations
     # ------------------------------------------------------------------
 
-    def pick_flower(self) -> bool:
-        """Click the Pick button to remove the existing flower."""
+    def pick_flower(self, hint_frame: object | None = None) -> bool:
+        """Click Pick or Remove to clear an existing grown flower.
+
+        Pass *hint_frame* when it is the same screenshot that classified as
+        ``PICK`` so the click uses those coordinates before re-capturing.
+        """
         t0 = time.monotonic()
-        if not find_and_click("pick_flower_button", stop_event=self._stop_event):
-            self._status("Pick button not found")
+        win = find_ttr_window()
+        if win is None:
+            self._status("Window not found")
+            return False
+        if not click_pick_or_remove_grown_flower(
+            self._stop_event,
+            hint_frame=hint_frame,
+            win=win,
+        ):
+            self._status("Pick / Remove button not found")
             return False
         log.info("[Timing] pick_click=%.0fms", (time.monotonic() - t0) * 1000)
 
@@ -163,10 +179,14 @@ class GardenBot(BotBase):
         win = find_ttr_window()
         if win is not None:
             frame = capture_window(win)
-            if frame is not None and is_element_visible(frame, "pick_flower_button"):
+            if frame is not None and classify_bed_state(frame) == BedState.PICK:
                 self._status(f"Existing flower detected — picking before planting {flower_name}")
-                if not find_and_click("pick_flower_button", stop_event=self._stop_event):
-                    self._status("Pick button not found")
+                if not click_pick_or_remove_grown_flower(
+                    self._stop_event,
+                    hint_frame=frame,
+                    win=win,
+                ):
+                    self._status("Pick / Remove button not found")
                     return False
                 time.sleep(settings.GARDEN_POST_PICK_DELAY_S)
 

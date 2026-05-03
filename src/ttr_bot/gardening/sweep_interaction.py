@@ -114,7 +114,7 @@ def interact_at_bed(ctx: BedActionContext) -> None:
 
     state = classify_bed_state(frame)
     _save_bed_debug(frame, state, bed_num, ctx.debug_save_fn)
-    _execute_bed_action(state, bed_num, ctx)
+    _execute_bed_action(state, bed_num, ctx, frame)
     time.sleep(0.5)
 
 
@@ -142,10 +142,10 @@ def _save_bed_debug(frame, state: BedState, bed_num: int, debug_save_fn) -> None
         debug_save_fn(debug_frame, f"bed{bed_num}_state_{state.value}")
 
 
-def _execute_bed_action(state: BedState, bed_num: int, ctx: BedActionContext) -> None:
+def _execute_bed_action(state: BedState, bed_num: int, ctx: BedActionContext, frame) -> None:
     """Execute the appropriate action for the detected bed state."""
     if state == BedState.PICK:
-        _do_pick_and_plant(bed_num, ctx)
+        _do_pick_and_plant(bed_num, ctx, frame)
     elif state == BedState.PLANT:
         if ctx.status_fn:
             ctx.status_fn(f"Bed #{bed_num}: planting {ctx.flower_name}")
@@ -155,11 +155,11 @@ def _execute_bed_action(state: BedState, bed_num: int, ctx: BedActionContext) ->
         ctx.status_fn(f"Bed #{bed_num}: state={state.value} — skipping")
 
 
-def _do_pick_and_plant(bed_num: int, ctx: BedActionContext) -> None:
+def _do_pick_and_plant(bed_num: int, ctx: BedActionContext, frame) -> None:
     """Pick an existing flower and plant a new one."""
     if ctx.status_fn:
         ctx.status_fn(f"Bed #{bed_num}: picking grown flower")
-    if ctx.bot.pick_flower():
+    if ctx.bot.pick_flower(hint_frame=frame):
         ctx.result.beds_picked += 1
         time.sleep(1.0)
         if ctx.status_fn:

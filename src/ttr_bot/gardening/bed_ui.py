@@ -29,8 +29,9 @@ BED_BUTTON_NAMES = (
 
 # Higher threshold for classify to reject cross-matches between the very
 # similar pick/plant/remove templates.  Real matches are >0.85; the
-# pick-vs-plant false positive is ~0.675.
-_CLASSIFY_THRESHOLD = 0.75
+# pick-vs-plant false positive is ~0.675.  Click polling uses the default
+# (lower) global threshold so matches stay recoverable frame-to-frame.
+BED_CLASSIFY_THRESHOLD = 0.75
 
 
 def detect_bed_button(frame) -> str | None:
@@ -41,41 +42,66 @@ def detect_bed_button(frame) -> str | None:
     return None
 
 
-def classify_bed_state(frame) -> BedState:
+def classify_bed_state(frame, *, log_matches: bool = True) -> BedState:  # noqa: C901, PLR0911
     """Classify the current garden bed UI state.
 
     Uses a stricter confidence threshold than general template matching to
     avoid cross-matches between the visually similar pick/plant/remove icons.
+
+    Set *log_matches* to False when polling rapidly (e.g. waiting between beds)
+    so INFO logs are not flooded — the sidebar often shows Pick after planting.
     """
     t0 = time.monotonic()
 
-    plant = tm.find_template(frame, "plant_flower_button", threshold=_CLASSIFY_THRESHOLD)
+    def _log(msg: str, *args: object) -> None:
+        if log_matches:
+            log.info(msg, *args)
+
+    plant = tm.find_template(frame, "plant_flower_button", threshold=BED_CLASSIFY_THRESHOLD)
     if plant is not None:
-        log.info("  classify → plant (conf=%.3f, %.0fms)", plant.confidence, _ms(t0))
+        _log("  classify → plant (conf=%.3f, %.0fms)", plant.confidence, _ms(t0))
         return BedState.PLANT
 
-    pick = tm.find_template(frame, "pick_flower_button", threshold=_CLASSIFY_THRESHOLD)
+    pick = tm.find_template(frame, "pick_flower_button", threshold=BED_CLASSIFY_THRESHOLD)
     if pick is not None:
-        log.info("  classify → pick (conf=%.3f, %.0fms)", pick.confidence, _ms(t0))
+        _log("  classify → pick (conf=%.3f, %.0fms)", pick.confidence, _ms(t0))
         return BedState.PICK
 
-    remove = tm.find_template(frame, "remove_button", threshold=_CLASSIFY_THRESHOLD)
+    remove = tm.find_template(frame, "remove_button", threshold=BED_CLASSIFY_THRESHOLD)
     if remove is not None:
-        log.info("  classify → pick via remove (conf=%.3f, %.0fms)", remove.confidence, _ms(t0))
+        _log("  classify → pick via remove (conf=%.3f, %.0fms)", remove.confidence, _ms(t0))
         return BedState.PICK
 
     water = tm.find_template(frame, "watering_can_button")
     if water is not None:
-        plant_retry = tm.find_template(frame, "plant_flower_button")
+        plant_retry = tm.find_template(
+            frame, "plant_flower_button", threshold=BED_CLASSIFY_THRESHOLD
+        )
         if plant_retry is not None:
-            log.info(
-                "  classify → plant (retry conf=%.3f, %.0fms)", plant_retry.confidence, _ms(t0)
-            )
+            _log("  classify → plant (retry conf=%.3f, %.0fms)", plant_retry.confidence, _ms(t0))
             return BedState.PLANT
-        log.info("  classify → unknown (sidebar visible, %.0fms)", _ms(t0))
+        pick_retry = tm.find_template(
+            frame, "pick_flower_button", threshold=BED_CLASSIFY_THRESHOLD
+        )
+        if pick_retry is not None:
+            _log(
+                "  classify → pick (with watering can, conf=%.3f, %.0fms)",
+                pick_retry.confidence,
+                _ms(t0),
+            )
+            return BedState.PICK
+        remove_retry = tm.find_template(frame, "remove_button", threshold=BED_CLASSIFY_THRESHOLD)
+        if remove_retry is not None:
+            _log(
+                "  classify → pick via remove (with watering can, conf=%.3f, %.0fms)",
+                remove_retry.confidence,
+                _ms(t0),
+            )
+            return BedState.PICK
+        _log("  classify → unknown (sidebar visible, %.0fms)", _ms(t0))
         return BedState.UNKNOWN
 
-    log.info("  classify → unknown (%.0fms)", _ms(t0))
+    _log("  classify → unknown (%.0fms)", _ms(t0))
     return BedState.UNKNOWN
 
 

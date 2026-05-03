@@ -138,7 +138,7 @@ class GardenWatcher:
             self._status(f"Bed #{bed_num}: {state}")
 
             t0 = time.monotonic()
-            self._execute(state, bed_num, flower_name, bean_sequence, result)
+            self._execute(state, bed_num, flower_name, bean_sequence, result, frame)
             log.info("[Timing] bed_action_total=%.0fms", (time.monotonic() - t0) * 1000)
             self._status("Done — walk to next bed…")
 
@@ -162,7 +162,7 @@ class GardenWatcher:
             if frame is None:
                 unknown_streak += 1
             else:
-                state = classify_bed_state(frame)
+                state = classify_bed_state(frame, log_matches=False)
                 if state == BedState.PLANT:
                     log.info(
                         "[Watcher] new bed detected (plant) after %.0fms",
@@ -188,17 +188,18 @@ class GardenWatcher:
         self._last_grab_ms = (time.monotonic() - t0) * 1000
         return frame
 
-    def _execute(
+    def _execute(  # noqa: PLR0913 — watcher bed handler needs full context
         self,
         state: BedState,
         bed_num: int,
         flower_name: str,
         bean_sequence: str,
         result: WatcherResult,
+        frame,
     ) -> None:
         if state == BedState.PICK:
             self._status(f"Bed #{bed_num}: picking → planting {flower_name} → watering")
-            if self._bot.pick_flower():
+            if self._bot.pick_flower(hint_frame=frame):
                 result.beds_picked += 1
                 t_gap = time.monotonic()
                 time.sleep(1.0)

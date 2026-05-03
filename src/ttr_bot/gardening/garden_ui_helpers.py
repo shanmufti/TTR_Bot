@@ -8,6 +8,7 @@ from ttr_bot.config import settings
 from ttr_bot.core import input_controller as inp
 from ttr_bot.core.screen_capture import capture_window
 from ttr_bot.core.window_manager import WindowInfo, find_ttr_window
+from ttr_bot.gardening.bed_ui import BED_CLASSIFY_THRESHOLD
 from ttr_bot.utils.logger import log
 from ttr_bot.vision.template_matcher import find_template
 
@@ -114,6 +115,87 @@ def find_and_click(  # noqa: PLR0913 — optional vision kwargs are intentional
 
     log.warning("Template %s not found within %.1fs (%d polls)", template_name, timeout, polls)
     return None
+
+
+def click_pick_or_remove_from_frame(
+    frame,
+    win: WindowInfo,
+    stop_event: threading.Event | None = None,
+) -> bool:
+    """Click Pick or Remove using *frame* coordinates (same pass as classify).
+
+    Re-capturing before click can miss a brief match; this uses the screenshot
+    that already classified as pick/remove.
+    """
+    if stop_event is not None and stop_event.is_set():
+        return False
+    # Classify uses BED_CLASSIFY_THRESHOLD; use that first, then default for dips.
+    relaxed = settings.TEMPLATE_MATCH_THRESHOLD
+    for thr in (BED_CLASSIFY_THRESHOLD, relaxed):
+        for name in ("pick_flower_button", "remove_button"):
+            match = find_template(frame, name, threshold=thr)
+            if match is None:
+                continue
+            inp.ensure_focused()
+            time.sleep(0.05)
+            inp.click(match.x, match.y, window=win)
+            log.info(
+                "Clicked %s at (%d,%d) conf=%.3f thr=%.2f (same frame as classify)",
+                name,
+                match.x,
+                match.y,
+                match.confidence,
+                thr,
+            )
+            return True
+    return False
+
+
+def click_pick_or_remove_grown_flower(
+    stop_event: threading.Event | None = None,
+    *,
+    hint_frame: object | None = None,
+    win: WindowInfo | None = None,
+) -> bool:
+    """Clear a grown flower via sidebar **Pick** or **Remove** (same bed state).
+
+    If *hint_frame* is the screenshot that produced ``BedState.PICK``, it is
+    used first so timing cannot drop the template match before click.
+
+    :func:`~ttr_bot.gardening.bed_ui.classify_bed_state` maps both templates to
+    ``PICK``, but only one control is visible per frame; callers must try both.
+    """
+    w = win if win is not None else find_ttr_window()
+    if w is None:
+        return False
+
+    if hint_frame is not None and click_pick_or_remove_from_frame(hint_frame, w, stop_event):
+        return True
+
+    budget = settings.GARDEN_FIND_TIMEOUT_S
+    first_phase = max(3.0, budget * 0.45)
+    second_phase = max(3.0, budget * 0.55)
+
+    if find_and_click(
+        "pick_flower_button",
+        win=w,
+        stop_event=stop_event,
+        timeout=first_phase,
+    ):
+        return True
+    log.info(
+        "Garden: pick_flower_button not found in %.1fs; trying remove_button",
+        first_phase,
+    )
+    return (
+        find_and_click(
+            "remove_button",
+            win=w,
+            stop_event=stop_event,
+            timeout=second_phase,
+        )
+        is not None
+    )
 
 
 def ensure_calibrated(
